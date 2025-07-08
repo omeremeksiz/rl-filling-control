@@ -1,0 +1,8 @@
+CREATE TABLE filling_statistics_table (
+    id SERIAL PRIMARY KEY,
+    valid_fillings INT NOT NULL,
+    overflow_fillings INT NOT NULL,
+    underflow_fillings INT NOT NULL,
+    safe_fillings INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

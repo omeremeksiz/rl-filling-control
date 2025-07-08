@@ -1,0 +1,10 @@
+# Define exact paths
+# data_path = "/Users/omeremeksiz/Desktop/MasaUstu/RL/data/data_v3/10KQuantize.xlsx"
+data_path = "/Users/omeremeksiz/Desktop/masaustu/reinforcement-learning/data/data_v3/10KQuantize.xlsx"
+tolerance_pairs_path = "tolerance_pairs.txt"
+final_arr_path = "final_arr.txt"
+qvalue_update_path = "qvalue_update.txt"
+td_qvalue_path = "qvalue_output.txt"
+td_qvalue_html_path = "td_qvalue.html"
+td_best_actions_path = "best_actions.txt"
+td_best_actions_html_path = "td_best_actions.html"

@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS filling_data_table (
+    id SERIAL PRIMARY KEY,
+    raw_data TEXT NOT NULL,
+    coarse_time INT,
+    fine_time INT,
+    total_time INT,
+    switching_state FLOAT,
+    overflow_amount FLOAT,
+    underflow_amount FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
