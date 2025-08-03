@@ -1,26 +1,48 @@
-# Reinforcement Learning for Industrial Filling Process Control
+# RL-FILLING-Control
 
-This repository contains the implementation of reinforcement learning methods for optimizing industrial filling processes. The project includes various RL algorithms such as Q-Learning, TD-Learning, and Monte Carlo methods, along with simulation and data processing tools.
+Reinforcement Learning approaches for industrial filling process optimization and control.
+
+## Overview
+
+This repository contains implementations of various reinforcement learning methods for optimizing industrial container filling processes. The project includes Monte Carlo learning and Multi-Armed Bandit approaches for determining optimal switching points between fast and slow filling modes.
 
 ## Project Structure
 
 ```
-reinforcement-learning/
-├── app/
-│   ├── db_utils/         # Database utilities and Excel processing
-│   ├── sim/             # Simulation environment and RL models
-│   └── train/           # Training implementations and analysis
+rl-filling-control/
+├── mc/                     # Monte Carlo Reinforcement Learning
+│   ├── train/             # Training implementation
+│   ├── sim/               # Simulation environment
+│   └── README.md
+├── mab/                    # Multi-Armed Bandit approach
+│   ├── src/               # Source code
+│   ├── output/            # Results
+│   └── README.md
+├── data/                   # Data files (gitignored)
+│   └── data.xlsx          # Training data
+└── README.md              # This file
 ```
 
 ## Key Components
 
-- **Simulation Environment**: Implementation of modbus and TCP communication for process simulation
-- **RL Algorithms**: 
-  - Q-Learning
-  - TD-Learning
-  - Monte Carlo Learning
-- **Data Analysis**: Comprehensive MATLAB scripts for result analysis and visualization
-- **Database Integration**: Tools for processing and storing filling process data
+- **Monte Carlo Learning**: Implementation of MC methods for filling control optimization
+- **Multi-Armed Bandit**: Q-learning based approach for optimal switching point determination
+- **Simulation Environment**: Real-time process simulation with communication protocols
+- **Data Analysis**: Comprehensive analysis and visualization tools
+
+## Quick Start
+
+### Monte Carlo Learning
+```bash
+cd mc/train
+python main.py
+```
+
+### Multi-Armed Bandit
+```bash
+cd mab
+python main.py
+```
 
 ## Publications
 
@@ -34,4 +56,4 @@ This work was supported by TÜBİTAK TEYDEB 1501 program under the project title
 
 ## License
 
-All rights reserved. This project is proprietary and confidential.
+All rights reserved. This project is proprietary and confidential. 
