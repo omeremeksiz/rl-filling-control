@@ -1,59 +1,102 @@
-# RL-FILLING-Control
+# Reinforcement Learning for Filling Control
 
-Reinforcement Learning approaches for industrial filling process optimization and control.
+RL system for finding optimal switching points in container filling systems using MAB, Monte Carlo, TD, and Q-Learning methods.
 
-## Overview
+## Problem
 
-This repository contains implementations of various reinforcement learning methods for optimizing industrial container filling processes. The project includes Monte Carlo learning and Multi-Armed Bandit approaches for determining optimal switching points between fast and slow filling modes.
+Find optimal switching point from fast to slow filling mode to:
+- Keep final weight in safe range (74-76)
+- Minimize filling time
 
-## Project Structure
+## Usage
 
-```
-rl-filling-control/
-├── mc/                     # Monte Carlo Reinforcement Learning
-│   ├── train/             # Training implementation
-│   ├── sim/               # Simulation environment
-│   └── README.md
-├── mab/                    # Multi-Armed Bandit approach
-│   ├── src/               # Source code
-│   ├── output/            # Results
-│   └── README.md
-├── data/                   # Data files (gitignored)
-│   └── data.xlsx          # Training data
-└── README.md              # This file
-```
-
-## Key Components
-
-- **Monte Carlo Learning**: Implementation of MC methods for filling control optimization
-- **Multi-Armed Bandit**: Q-learning based approach for optimal switching point determination
-- **Simulation Environment**: Real-time process simulation with communication protocols
-- **Data Analysis**: Comprehensive analysis and visualization tools
-
-## Quick Start
-
-### Monte Carlo Learning
 ```bash
-cd mc/train
-python main.py
+pip install -r requirements.txt
+python main.py --method [mab|mc|td|qlearning] --episodes [number]
 ```
 
-### Multi-Armed Bandit
-```bash
-cd mab
-python main.py
+**Methods**: MAB, Monte Carlo, TD, Q-Learning  
+**Details**: See [METHODS.md](METHODS.md)
+
+## Code Structure
+
+### Project Layout
+```
+src/                    # Core source code directory
+├── Core System
+│   ├── main.py         # Entry point and CLI argument parsing
+│   ├── config.py       # Global configuration parameters
+│   └── filling_control_system.py  # Main orchestrator class
+├── RL Agents
+│   ├── base_agent.py              # Abstract base class for all RL methods
+│   ├── agent_factory.py           # Factory for creating different agents
+│   ├── q_learning_agent.py        # Multi-Armed Bandit (MAB) implementation
+│   ├── monte_carlo_agent.py       # Monte Carlo method implementation
+│   ├── td_agent.py                # Temporal Difference (TD) learning
+│   └── qlearning_standard_agent.py # Standard Q-Learning implementation
+├── Data & Rewards
+│   ├── data_processor.py          # Excel data loading and preprocessing
+│   └── reward_calculator.py       # Reward computation logic
+└── Utilities
+    ├── logger.py                  # Training progress logging
+    └── visualizer.py              # Plotting and visualization
+    
+output/         # Training results (auto-generated)
+data/           # Input data directory
+main.py         # Main entry point
+METHODS.md      # Detailed method documentation
+requirements.txt # Python dependencies
 ```
 
-## Publications
+### File Responsibilities
 
-1. Ö. S. Emeksiz, E. Maşazade, S. Selim, "AI-Driven Optimization of the Filling Process: A Comparison of Reinforcement Learning Methods," 33rd Signal Processing and Communications Applications Conference (SIU), 2025 (to appear)
+#### Core System
+- **`main.py`**: Simple entry point that delegates to `filling_control_system.py`
+- **`config.py`**: Centralized configuration including learning rates, exploration parameters, reward penalties, and file paths
+- **`filling_control_system.py`**: Main orchestrator that coordinates data loading, agent creation, training, logging, and visualization
 
-2. Ö. S. Emeksiz, M. E. Ağcabay, E. Maşazade, S. Selim, T. Boysan, "A Reinforcement Learning Model for Industrial Filling Process Control," IEEE 30th International Conference on Electronics, Circuits and Systems (ICECS), 2023. [IEEE Xplore](https://ieeexplore.ieee.org/abstract/document/10382724)
+#### RL Agents
+- **`base_agent.py`**: Abstract base class defining the common interface for all RL methods (train_episode, get_best_action, etc.)
+- **`agent_factory.py`**: Factory pattern implementation for creating different RL agents based on method selection
+- **`q_learning_agent.py`**: Multi-Armed Bandit implementation treating each switch point as an independent arm
+- **`monte_carlo_agent.py`**: Monte Carlo method with episode-based learning and return calculation
+- **`td_agent.py`**: Temporal Difference learning with step-by-step value updates
+- **`qlearning_standard_agent.py`**: Standard Q-Learning with state-action value function
 
-## Acknowledgment
+#### Data Processing & Rewards
+- **`data_processor.py`**: Handles Excel file loading, session parsing, and extraction of switch points and final weights
+- **`reward_calculator.py`**: Computes rewards based on episode length and safety constraints (overflow/underflow penalties)
 
-This work was supported by TÜBİTAK TEYDEB 1501 program under the project titled "Development of Data Analysis Device for Development of AI-Supported Weighing Device in Manufacturing Filling Systems (BX30Fill Analyzer)" (Project No: 3230048).
+#### Utilities
+- **`logger.py`**: Manages training progress logging, file output, and experiment tracking
+- **`visualizer.py`**: Creates plots for Q-values, switch point trajectories, and result analysis
 
-## License
+**Data**: Located in `data/data.xlsx` - contains filling session data with columns as sessions and special tokens (-1 for switch, 300 for termination)
 
-All rights reserved. This project is proprietary and confidential. 
+## Data
+
+Excel file with filling sessions:
+- Columns = sessions
+- Values = weight measurements  
+- `-1` = switch point, `300` = termination
+
+## Methods
+
+| Method | Type | Best For |
+|--------|------|----------|
+| MAB | Direct optimization | Simple problems |
+| MC | Episode-based | Detailed analysis |
+| TD | Step-by-step (conservative) | Safe policies |
+| Q-Learning | Step-by-step (optimal) | Best performance |
+
+## Configuration
+
+Edit `src/config.py` for parameters like learning rate, exploration rate, episodes, and penalties.
+
+## Output
+
+Results saved to `output/{timestamp}/`:
+- `training_process.log` - training logs
+- `qvalue_vs_state.png` - Q-value plots  
+- `switching_point_trajectory.png` - learning progress
+- `cluster_histogram.png` - switch point distribution 
