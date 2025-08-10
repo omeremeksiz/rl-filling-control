@@ -13,11 +13,16 @@ This document explains the four reinforcement learning methods implemented in ou
 
 ### Reward Structure
 ```
-Base Reward: -1 (time penalty per step)
-Final Penalty: 
+For MAB (Multi-Armed Bandit):
+  - Safe: -length
+  - Overflow: -length + overflow_penalty × (final_weight - safe_min)
+  - Underflow: -length + (safe_min - final_weight) × underflow_penalty
+
+For other methods (MC, TD, Q-Learning):
+  - Safe: -1 (time penalty per step)
   - Overflow: (final_weight - safe_min) × overflow_penalty
   - Underflow: (safe_min - final_weight) × underflow_penalty
-Total Reward = -1 + penalty
+  - Total Reward = -1 + penalty
 ```
 
 ## Method Comparison Overview
@@ -51,10 +56,18 @@ Q(switch_point) = Q(switch_point) + α × (reward - Q(switch_point))
 best_switch_point = argmax Q(switch_point)
 ```
 
+### Reward Structure
+```
+Safe: -length
+Overflow: -length + overflow_penalty × (final_weight - safe_min)
+Underflow: -length + (safe_min - final_weight) × underflow_penalty
+```
+
 ### Characteristics
 - Simple and direct
 - Fast convergence
 - Limited to switching point optimization only
+- Uses episode length as base penalty instead of per-step penalty
 
 ---
 
@@ -183,16 +196,30 @@ elif switch_point < min_available:
 
 ### Reward Calculation
 ```python
-def calculate_reward(episode_length, final_weight):
-    base_reward = -1.0  # Time penalty
-    penalty = 0.0
-    
-    if final_weight > safe_max:  # Overflow
-        penalty = (final_weight - safe_min) × overflow_penalty_constant
-    elif final_weight < safe_min:  # Underflow  
-        penalty = (safe_min - final_weight) × underflow_penalty_constant
+def calculate_reward(episode_length, final_weight, method="standard"):
+    if method.lower() == "mab":
+        # MAB-specific reward calculation
+        base_reward = -episode_length
         
-    return base_reward + penalty
+        if final_weight > safe_max:  # Overflow
+            penalty = (final_weight - safe_min) × overflow_penalty_constant
+        elif final_weight < safe_min:  # Underflow  
+            penalty = (safe_min - final_weight) × underflow_penalty_constant
+        else:  # Safe
+            penalty = 0.0
+            
+        return base_reward + penalty
+    else:
+        # Standard reward calculation for other methods
+        base_reward = -1.0  # Time penalty per step
+        penalty = 0.0
+        
+        if final_weight > safe_max:  # Overflow
+            penalty = (final_weight - safe_min) × overflow_penalty_constant
+        elif final_weight < safe_min:  # Underflow  
+            penalty = (safe_min - final_weight) × underflow_penalty_constant
+            
+        return base_reward + penalty
 ```
 
 ### Data Processing

@@ -66,7 +66,7 @@ class QLearningAgent(BaseRLAgent):
         final_weight = selected_session.final_weight
         
         # Calculate reward
-        reward = self.reward_calculator.calculate_reward(episode_length, final_weight)
+        reward = self.reward_calculator.calculate_reward(episode_length, final_weight, method="mab")
         
         # Update Q-value
         self._update_q_value(current_switch_point, reward)

@@ -195,10 +195,6 @@ class TrainingVisualizer:
                 bars[best_index].set_color('red')
                 bars[best_index].set_alpha(0.8)
                 
-                # Add value labels on the best bar
-                best_q_value = switch_point_q_values[best_switch_point]
-                plt.text(best_switch_point, best_q_value + 1, f'{best_q_value:.2f}', 
-                        ha='center', va='bottom', fontweight='bold')
             else:
                 # If best switch point not in plot, add a vertical line
                 plt.axvline(x=best_switch_point, color='red', linestyle='--', alpha=0.8, 

@@ -25,32 +25,54 @@ class RewardCalculator:
         self.overflow_penalty_constant = overflow_penalty_constant
         self.underflow_penalty_constant = underflow_penalty_constant
     
-    def calculate_reward(self, episode_length: int, final_weight: int) -> float:
+    def calculate_reward(self, episode_length: int, final_weight: int, method: str = "standard") -> float:
         """
         Calculate reward for a filling episode.
         
         Args:
             episode_length: Number of steps until termination
             final_weight: Final weight achieved
+            method: RL method ("mab" for Multi-Armed Bandit, "standard" for others)
             
         Returns:
-            Reward value: -1 + penalty
-            - Safe: -1 + 0 = -1
-            - Overflow: -1 + (final_weight - safe_min) * overflow_penalty_constant  
-            - Underflow: -1 + (safe_min - final_weight) * underflow_penalty_constant
+            Reward value:
+            For MAB:
+              - Safe: -length
+              - Overflow: -length + overflow_penalty * (final_weight - safe_min)
+              - Underflow: -length + (safe_min - final_weight) * underflow_penalty
+            For other methods:
+              - Safe: -1 + 0 = -1
+              - Overflow: -1 + (final_weight - safe_min) * overflow_penalty_constant  
+              - Underflow: -1 + (safe_min - final_weight) * underflow_penalty_constant
         """
-        base_reward = -1.0
-        
-        if self._is_weight_safe(final_weight):
-            penalty = 0.0
-        elif final_weight > self.safe_weight_max:  # Overflow
-            overflow_amount = final_weight - self.safe_weight_min
-            penalty = overflow_amount * self.overflow_penalty_constant
-        else:  # Underflow
-            underflow_amount = self.safe_weight_min - final_weight
-            penalty = underflow_amount * self.underflow_penalty_constant
-        
-        return base_reward + penalty
+        if method.lower() == "mab":
+            # MAB-specific reward calculation
+            base_reward = -episode_length
+            
+            if self._is_weight_safe(final_weight):
+                penalty = 0.0
+            elif final_weight > self.safe_weight_max:  # Overflow
+                overflow_amount = final_weight - self.safe_weight_min
+                penalty = overflow_amount * self.overflow_penalty_constant
+            else:  # Underflow
+                underflow_amount = self.safe_weight_min - final_weight
+                penalty = underflow_amount * self.underflow_penalty_constant
+            
+            return base_reward + penalty
+        else:
+            # Standard reward calculation for other methods
+            base_reward = -1.0
+            
+            if self._is_weight_safe(final_weight):
+                penalty = 0.0
+            elif final_weight > self.safe_weight_max:  # Overflow
+                overflow_amount = final_weight - self.safe_weight_min
+                penalty = overflow_amount * self.overflow_penalty_constant
+            else:  # Underflow
+                underflow_amount = self.safe_weight_min - final_weight
+                penalty = underflow_amount * self.underflow_penalty_constant
+            
+            return base_reward + penalty
     
     def _is_weight_safe(self, final_weight: int) -> bool:
         """Check if the final weight is within the safe range."""
