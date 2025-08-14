@@ -203,9 +203,7 @@ class QLearningAgent(BaseRLAgent):
             
         Returns:
             Selected switch point for exploration
-        """
-        print(f"DEBUG: _explore_with_steps called with current_switch_point: {current_switch_point}")
-        
+        """        
         # Get available switch points in ascending order
         available_points = sorted(self.available_switch_points)
         

@@ -23,7 +23,7 @@ DEFAULT_UNDERFLOW_PENALTY_CONSTANT = 0.0  # Penalty per weight unit below safe m
 
 # Exploration parameters (common - only positive direction)
 EXPLORATION_STEPS = [1, 2, 3, 4, 5]  # exploration steps (+1, +2, +3, +4, +5 from best)
-EXPLORATION_PROBABILITIES = [0.33, 0.27, 0.20, 0.13, 0.067]  # Must sum to 1.0 for guaranteed step selection
+EXPLORATION_PROBABILITIES = [0.33, 0.27, 0.20, 0.13, 0.07]  # Must sum to 1.0 for guaranteed step selection
 # EXPLORATION_STEPS = [1]  # exploration steps (+1, +2, +3, +4, +5 from best)
 # EXPLORATION_PROBABILITIES = [1.00]  # Must sum to 1.0 for guaranteed step selection
 
