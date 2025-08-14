@@ -39,8 +39,6 @@ class BaseRLAgent(ABC):
         # Training statistics
         self.training_history = []
     
-
-    
     @abstractmethod
     def train_episode(self, current_switch_point: int) -> Tuple[float, int, int]:
         """
@@ -114,21 +112,19 @@ class BaseRLAgent(ABC):
         exploration_flag = False
         if random.random() < self.exploration_rate:
             # Exploration: step-based exploration
-            return self._explore_with_steps()
+            exploration_flag = True
+            return self._explore_with_steps(), exploration_flag
         else:
             # Exploitation: choose best action with bounds checking
+            exploration_flag = False
             best_switch_point = self._get_best_switch_point()
             
-            # Ensure best_switch_point is within available range
-            if best_switch_point > max(self.available_switch_points):
-                best_switch_point = max(self.available_switch_points)
-            elif best_switch_point < min(self.available_switch_points):
-                best_switch_point = min(self.available_switch_points)
-            elif best_switch_point not in self.available_switch_points:
-                # If not in list but within bounds, find nearest available point
+            # Check if best switch point is in available points
+            if best_switch_point not in self.available_switch_points:
+                # If not in list find nearest available point
                 best_switch_point = min(self.available_switch_points, key=lambda x: abs(x - best_switch_point))
             
-            return best_switch_point
+            return best_switch_point, exploration_flag
     
     def _explore_with_steps(self) -> int:
         """
@@ -144,7 +140,7 @@ class BaseRLAgent(ABC):
         # Get available switch points in ascending order
         available_points = sorted(self.available_switch_points)
         
-        # Bounds checking: ensure best_switch_point is within available range
+        # Check if best switch point is in available points
         if best_switch_point not in available_points:
             # If not in list find nearest available point
             best_switch_point = min(available_points, key=lambda x: abs(x - best_switch_point))

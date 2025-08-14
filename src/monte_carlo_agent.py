@@ -176,10 +176,7 @@ class MonteCarloAgent(BaseRLAgent):
         # Update Q-values using Monte Carlo update
         self._update_q_values(episode, g_values)
         
-        # Calculate total episode reward for logging
-        episode_reward = sum(reward for _, _, reward in episode)
-        
-        return episode_reward, episode_length, final_weight
+        return episode_length, final_weight
     
     def _create_episode_trajectory(self, session: FillingSession, switch_point: int) -> List[Tuple[int, int, float]]:
         """
@@ -295,7 +292,7 @@ class MonteCarloAgent(BaseRLAgent):
         
         for episode in range(num_episodes):
             # Train on one episode
-            reward, episode_length, final_weight = self.train_episode(current_switch_point)
+            episode_length, final_weight = self.train_episode(current_switch_point)
             
             # Determine termination type
             termination_type = self._determine_termination_type(final_weight)
@@ -318,7 +315,6 @@ class MonteCarloAgent(BaseRLAgent):
                 'switch_point': current_switch_point,
                 'model_selected_switching_point': model_selected_next_switch_point,
                 'explored_switching_point': explored_switch_point,
-                'reward': reward,
                 'episode_length': episode_length,
                 'final_weight': final_weight,
                 'termination_type': termination_type
