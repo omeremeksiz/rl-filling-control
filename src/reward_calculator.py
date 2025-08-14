@@ -52,7 +52,7 @@ class RewardCalculator:
             if self._is_weight_safe(final_weight):
                 penalty = 0.0
             elif final_weight > self.safe_weight_max:  # Overflow
-                overflow_amount = final_weight - self.safe_weight_max
+                overflow_amount = final_weight - self.safe_weight_min
                 penalty = overflow_amount * self.overflow_penalty_constant
             else:  # Underflow
                 underflow_amount = self.safe_weight_min - final_weight
@@ -66,7 +66,7 @@ class RewardCalculator:
             if self._is_weight_safe(final_weight):
                 penalty = 0.0
             elif final_weight > self.safe_weight_max:  # Overflow
-                overflow_amount = final_weight - self.safe_weight_max
+                overflow_amount = final_weight - self.safe_weight_min
                 penalty = overflow_amount * self.overflow_penalty_constant
             else:  # Underflow
                 underflow_amount = self.safe_weight_min - final_weight

@@ -32,7 +32,6 @@ class MonteCarloAgent(BaseRLAgent):
         random.seed(random_seed)
         
         # Initialize Q-table for state-action pairs
-        self.available_weights = data_processor.get_all_available_weights()
         self.q_table = self._initialize_q_table()
     
     def _initialize_q_table(self) -> Dict[Tuple[int, int], float]:
@@ -76,16 +75,16 @@ class MonteCarloAgent(BaseRLAgent):
         # Create policy from Q-values with tie-breaking rule: if equal, choose -1
         policy = self._create_policy_from_q_values_with_tie_breaking()
         
-        # Use all available weights
-        available_weights = sorted(self.available_weights)
+        # Only consider weights that are valid switch points
+        valid_switch_points = sorted(self.available_switch_points)
         
         # Sort by weight value and find the first 1 to -1 transition (flipping)
         for weight in sorted(policy.keys()):
-            if weight in available_weights and policy[weight] == -1:
+            if weight in valid_switch_points and policy[weight] == -1:
                 return weight
         
-        # If there is no flipping (no -1 action found), continue with maximum available weight
-        return max(available_weights)
+        # If there is no flipping (no -1 action found), continue with maximum available switching point
+        return max(valid_switch_points)
     
     def _create_policy_from_q_values(self) -> Dict[int, int]:
         """Create policy from Q-values by selecting best action for each state."""
@@ -153,8 +152,12 @@ class MonteCarloAgent(BaseRLAgent):
         # Get unused sessions from the cluster of current switch point
         unused_sessions = self.data_processor.get_unused_sessions_for_switch_point(current_switch_point)
         
-        # Select a random session from the unused sessions
-        selected_session = random.choice(unused_sessions)
+        if not unused_sessions:
+            # If no sessions for this switch point, use a random session
+            all_sessions = self.data_processor.sessions
+            selected_session = random.choice(all_sessions)
+        else:
+            selected_session = random.choice(unused_sessions)
         
         # Create episode trajectory
         episode = self._create_episode_trajectory(selected_session, current_switch_point)
@@ -291,6 +294,9 @@ class MonteCarloAgent(BaseRLAgent):
         Returns:
             Training history
         """
+        if initial_switch_point is None:
+            initial_switch_point = random.choice(self.available_switch_points)
+        
         current_switch_point = initial_switch_point
         
         for episode in range(num_episodes):
@@ -304,11 +310,11 @@ class MonteCarloAgent(BaseRLAgent):
             model_selected_next_switch_point = self._get_best_switch_point()
             
             # Select next action for next episode (may include exploration)
-            next_switch_point, exploration_flag = self.select_action(current_switch_point)
+            next_switch_point = self.select_action(current_switch_point)
             
             # Determine if exploration occurred
             explored_switch_point = None
-            if exploration_flag:
+            if next_switch_point != model_selected_next_switch_point:
                 explored_switch_point = next_switch_point
             
             # Log episode results

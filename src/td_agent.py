@@ -113,33 +113,38 @@ class TDAgent(BaseRLAgent):
         
         return policy
 
-    def train_episode(self, current_switch_point: int) -> Tuple[float, int, int]:
-        """
-        Train on a single episode using the given switch point.
-        
-        Args:
-            current_switch_point: Switch point to use for this episode
-            
-        Returns:
-            Tuple of (reward, episode_length, final_weight)
-        """
-        # Get unused sessions from the cluster of current switch point
-        unused_sessions = self.data_processor.get_unused_sessions_for_switch_point(current_switch_point)
-        
-        if not unused_sessions:
-            # If no sessions for this switch point, use a random session
-            all_sessions = self.data_processor.sessions
-            selected_session = random.choice(all_sessions)
-        else:
-            selected_session = random.choice(unused_sessions)
-            # Mark this session as used
-            self.data_processor.mark_session_as_used(current_switch_point, selected_session)
+    def train_episode(self, switch_point: int) -> Tuple[float, int, int]:
+        """Train on a single episode using TD learning."""
+        # Select a random session for training
+        selected_session = random.choice(self.data_processor.sessions)
         
         # Create episode trajectory
-        trajectory = self._create_episode_trajectory(selected_session, current_switch_point)
+        trajectory = self._create_episode_trajectory(selected_session, switch_point)
         
         # TD learning: update Q-values after each step
-        self._update_q_values(trajectory)
+        for i in range(len(trajectory) - 1):
+            current_state, current_action, current_reward = trajectory[i]
+            next_state, next_action, next_reward = trajectory[i + 1]
+            
+            # Get current Q-value
+            current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
+            
+            # Get Q-value for the actual next action taken (true TD learning)
+            next_q = self.q_table.get((next_state, next_action), self.initial_q_value)
+            
+            # True TD update: Q(s,a) = Q(s,a) + α[r + γ*Q(s',a') - Q(s,a)]
+            # Uses actual next action taken, not max (SARSA-style)
+            td_target = current_reward + self.discount_factor * next_q
+            self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (td_target - current_q)
+        
+        # Handle the last step (terminal state)
+        if trajectory:
+            last_state, last_action, last_reward = trajectory[-1]
+            current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
+            
+            # For terminal state, next Q-value is 0
+            td_target = last_reward  # No next state
+            self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (td_target - current_q)
         
         # Return episode statistics
         final_weight = selected_session.final_weight if selected_session.final_weight is not None else 0
@@ -168,7 +173,7 @@ class TDAgent(BaseRLAgent):
             
             # Determine action based on switch point
             action = 1 if weight < switch_point else -1
-            step_reward = -1.0  # Time penalty per step
+            step_reward = -1  # Time penalty per step
             trajectory.append((weight, action, step_reward))
         
         # Add final episode reward to the last step
@@ -181,38 +186,6 @@ class TDAgent(BaseRLAgent):
             trajectory[-1] = (last_state, last_action, last_step_reward + final_episode_reward)
         
         return trajectory
-
-    def _update_q_values(self, trajectory: List[Tuple[int, int, float]]) -> None:
-        """
-        Update Q-values using TD learning update rule.
-        
-        Args:
-            trajectory: List of (state, action, reward) tuples
-        """
-        # TD learning: update Q-values after each step
-        for i in range(len(trajectory) - 1):
-            current_state, current_action, current_reward = trajectory[i]
-            next_state, next_action, next_reward = trajectory[i + 1]
-            
-            # Get current Q-value
-            current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
-            
-            # Get Q-value for the actual next action taken (true TD learning)
-            next_q = self.q_table.get((next_state, next_action), self.initial_q_value)
-            
-            # True TD update: Q(s,a) = Q(s,a) + α[r + γ*Q(s',a') - Q(s,a)]
-            # Uses actual next action taken, not max (SARSA-style)
-            td_target = current_reward + self.discount_factor * next_q
-            self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (td_target - current_q)
-        
-        # Handle the last step (terminal state)
-        if trajectory:
-            last_state, last_action, last_reward = trajectory[-1]
-            current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
-            
-            # For terminal state, next Q-value is 0
-            td_target = last_reward  # No next state
-            self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (td_target - current_q)
 
     def train(self, num_episodes: int, initial_switch_point: Optional[int] = None, logger: Optional[TrainingLogger] = None) -> List[Dict[str, Any]]:
         """Train the TD agent for specified number of episodes."""

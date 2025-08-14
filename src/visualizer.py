@@ -50,6 +50,19 @@ class TrainingVisualizer:
             episode_nums = [ep['episode_num'] for ep in training_history]
             # Show what the model selected (before exploration)
             model_selected = [ep['model_selected_switching_point'] for ep in training_history]
+        else:
+            # Legacy format - extract episode numbers
+            episode_nums = [ep.get('episode', i+1) for i, ep in enumerate(training_history)]
+            
+            # Check which format the training history uses for switch points
+            if 'next_switch_point' in training_history[0]:
+                # MAB format - show model selection
+                model_selected = [ep['next_switch_point'] for ep in training_history]
+            elif 'switch_point' in training_history[0]:
+                # MC format - show model selection
+                model_selected = [ep['switch_point'] for ep in training_history]
+            else:
+                raise ValueError("Training history format not recognized")
         
         # Create figure
         plt.figure(figsize=(14, 7), dpi=300)
