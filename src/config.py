@@ -18,8 +18,8 @@ DEFAULT_SAFE_WEIGHT_MIN = 74
 DEFAULT_SAFE_WEIGHT_MAX = 76
 
 # Reward calculation parameters
-DEFAULT_OVERFLOW_PENALTY_CONSTANT = -1950.0  # Penalty per weight unit above safe max
-DEFAULT_UNDERFLOW_PENALTY_CONSTANT = -1885.0  # Penalty per weight unit below safe min
+DEFAULT_OVERFLOW_PENALTY_CONSTANT = 0.0  # Penalty per weight unit above safe max
+DEFAULT_UNDERFLOW_PENALTY_CONSTANT = 0.0  # Penalty per weight unit below safe min
 
 # Exploration parameters (common - only positive direction)
 EXPLORATION_STEPS = [1, 2, 3, 4, 5]  # exploration steps (+1, +2, +3, +4, +5 from best)

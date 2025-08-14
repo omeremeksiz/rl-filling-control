@@ -151,7 +151,7 @@ class TrainingVisualizer:
             
             plt.xlabel('State (Weight)', fontsize=12)
             plt.ylabel('Q-Value', fontsize=12)
-            plt.title('Q-Values for Both Actions by State (Monte Carlo)', fontsize=14, fontweight='bold')
+            plt.title('Q-Values for Both Actions by State', fontsize=14, fontweight='bold')
             
             # Better x-axis formatting - show every 5th state for readability
             if len(all_states) > 20:

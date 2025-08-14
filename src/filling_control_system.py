@@ -203,8 +203,8 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='RL Filling Control System')
     parser.add_argument('--method', type=str, default=DEFAULT_RL_METHOD, 
-                       choices=['mab', 'mc', 'td', 'qlearning', 'q'], 
-                       help='RL method to use (mab, mc, td, qlearning, or q)')
+                       choices=['mab', 'mc', 'td', 'qlearning'], 
+                       help='RL method to use (mab, mc, td, or qlearning)')
     parser.add_argument('--episodes', type=int, default=DEFAULT_TRAINING_EPISODES,
                        help='Number of training episodes')
     

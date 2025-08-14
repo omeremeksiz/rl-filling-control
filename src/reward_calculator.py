@@ -61,7 +61,7 @@ class RewardCalculator:
             return base_reward + penalty
         else:
             # Standard reward calculation for other methods
-            base_reward = -1.0
+            base_reward = -episode_length
             
             if self._is_weight_safe(final_weight):
                 penalty = 0.0
