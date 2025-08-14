@@ -98,6 +98,16 @@ class DataProcessor:
         """Get all available switching points from the data."""
         return sorted(list(self.switch_point_clusters.keys()))
     
+    def get_all_available_weights(self) -> List[int]:
+        """Get all available weights from the data."""
+        all_weights = set()
+        for session in self.sessions:
+            # Add all weights from the sequence (excluding special tokens)
+            for weight in session.weight_sequence:
+                if weight != SWITCH_TOKEN and weight != TERMINATION_TOKEN:
+                    all_weights.add(weight)
+        return sorted(list(all_weights))
+    
     def get_sessions_for_switch_point(self, switch_point: int) -> List[FillingSession]:
         """Get all sessions that used a specific switch point."""
         return self.switch_point_clusters.get(switch_point, [])
