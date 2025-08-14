@@ -112,40 +112,33 @@ class StandardQLearningAgent(BaseRLAgent):
         
         return policy
 
-    def train_episode(self, switch_point: int) -> Tuple[float, int, int]:
-        """Train on a single episode using Q-learning."""
-        # Select a random session for training
-        selected_session = random.choice(self.data_processor.sessions)
+    def train_episode(self, current_switch_point: int) -> Tuple[float, int, int]:
+        """
+        Train on a single episode using the given switch point.
+        
+        Args:
+            current_switch_point: Switch point to use for this episode
+            
+        Returns:
+            Tuple of (reward, episode_length, final_weight)
+        """
+        # Get unused sessions from the cluster of current switch point
+        unused_sessions = self.data_processor.get_unused_sessions_for_switch_point(current_switch_point)
+        
+        if not unused_sessions:
+            # If no sessions for this switch point, use a random session
+            all_sessions = self.data_processor.sessions
+            selected_session = random.choice(all_sessions)
+        else:
+            selected_session = random.choice(unused_sessions)
+            # Mark this session as used
+            self.data_processor.mark_session_as_used(current_switch_point, selected_session)
         
         # Create episode trajectory
-        trajectory = self._create_episode_trajectory(selected_session, switch_point)
+        trajectory = self._create_episode_trajectory(selected_session, current_switch_point)
         
         # Q-learning: update Q-values after each step using max Q-value of next state
-        for i in range(len(trajectory) - 1):
-            current_state, current_action, current_reward = trajectory[i]
-            next_state, next_action, next_reward = trajectory[i + 1]
-            
-            # Get current Q-value
-            current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
-            
-            # Get maximum Q-value for next state (off-policy: max over all actions)
-            next_q_values = []
-            for action in [1, -1]:
-                next_q_values.append(self.q_table.get((next_state, action), self.initial_q_value))
-            max_next_q = max(next_q_values) if next_q_values else 0.0
-            
-            # Q-learning update: Q(s,a) = Q(s,a) + α[r + γ*max_Q(s',a') - Q(s,a)]
-            q_target = current_reward + self.discount_factor * max_next_q
-            self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (q_target - current_q)
-        
-        # Handle the last step (terminal state)
-        if trajectory:
-            last_state, last_action, last_reward = trajectory[-1]
-            current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
-            
-            # For terminal state, next Q-value is 0
-            q_target = last_reward  # No next state
-            self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (q_target - current_q)
+        self._update_q_values(trajectory)
         
         # Return episode statistics
         final_weight = selected_session.final_weight if selected_session.final_weight is not None else 0
@@ -187,6 +180,40 @@ class StandardQLearningAgent(BaseRLAgent):
             trajectory[-1] = (last_state, last_action, last_step_reward + final_episode_reward)
         
         return trajectory
+
+    def _update_q_values(self, trajectory: List[Tuple[int, int, float]]) -> None:
+        """
+        Update Q-values using Q-learning update rule.
+        
+        Args:
+            trajectory: List of (state, action, reward) tuples
+        """
+        # Q-learning: update Q-values after each step using max Q-value of next state
+        for i in range(len(trajectory) - 1):
+            current_state, current_action, current_reward = trajectory[i]
+            next_state, next_action, next_reward = trajectory[i + 1]
+            
+            # Get current Q-value
+            current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
+            
+            # Get maximum Q-value for next state (off-policy: max over all actions)
+            next_q_values = []
+            for action in [1, -1]:
+                next_q_values.append(self.q_table.get((next_state, action), self.initial_q_value))
+            max_next_q = max(next_q_values) if next_q_values else 0.0
+            
+            # Q-learning update: Q(s,a) = Q(s,a) + α[r + γ*max_Q(s',a') - Q(s,a)]
+            q_target = current_reward + self.discount_factor * max_next_q
+            self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (q_target - current_q)
+        
+        # Handle the last step (terminal state)
+        if trajectory:
+            last_state, last_action, last_reward = trajectory[-1]
+            current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
+            
+            # For terminal state, next Q-value is 0
+            q_target = last_reward  # No next state
+            self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (q_target - current_q)
 
     def train(self, num_episodes: int, initial_switch_point: Optional[int] = None, logger: Optional[TrainingLogger] = None) -> List[Dict[str, Any]]:
         """Train the Q-learning agent for specified number of episodes."""

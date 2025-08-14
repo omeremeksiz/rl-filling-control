@@ -111,6 +111,7 @@ class BaseRLAgent(ABC):
         Returns:
             Selected switch point
         """
+        exploration_flag = False
         if random.random() < self.exploration_rate:
             # Exploration: step-based exploration
             return self._explore_with_steps()
@@ -118,14 +119,14 @@ class BaseRLAgent(ABC):
             # Exploitation: choose best action with bounds checking
             best_switch_point = self._get_best_switch_point()
             
-            # Bounds checking: ensure best_switch_point is within available range
+            # Ensure best_switch_point is within available range
             if best_switch_point > max(self.available_switch_points):
-                return max(self.available_switch_points)
+                best_switch_point = max(self.available_switch_points)
             elif best_switch_point < min(self.available_switch_points):
-                return min(self.available_switch_points)
+                best_switch_point = min(self.available_switch_points)
             elif best_switch_point not in self.available_switch_points:
                 # If not in list but within bounds, find nearest available point
-                return min(self.available_switch_points, key=lambda x: abs(x - best_switch_point))
+                best_switch_point = min(self.available_switch_points, key=lambda x: abs(x - best_switch_point))
             
             return best_switch_point
     
@@ -144,12 +145,8 @@ class BaseRLAgent(ABC):
         available_points = sorted(self.available_switch_points)
         
         # Bounds checking: ensure best_switch_point is within available range
-        if best_switch_point > max(available_points):
-            best_switch_point = max(available_points)
-        elif best_switch_point < min(available_points):
-            best_switch_point = min(available_points)
-        elif best_switch_point not in available_points:
-            # If not in list but within bounds, find nearest available point
+        if best_switch_point not in available_points:
+            # If not in list find nearest available point
             best_switch_point = min(available_points, key=lambda x: abs(x - best_switch_point))
         
         # Find the best action index in sorted available points
@@ -170,14 +167,6 @@ class BaseRLAgent(ABC):
                 else:
                     # If step goes beyond available points, return the last available point
                     return available_points[-1]
-        
-        # This should never happen if probabilities sum to 1.0
-        # But as a safety fallback, take the smallest step
-        target_index = best_index + EXPLORATION_STEPS[0]
-        if target_index < len(available_points):
-            return available_points[target_index]
-        else:
-            return available_points[-1]
     
     @abstractmethod
     def _get_best_switch_point(self) -> int:

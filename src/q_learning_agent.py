@@ -52,15 +52,10 @@ class QLearningAgent(BaseRLAgent):
         # Get unused sessions from the cluster of current switch point
         unused_sessions = self.data_processor.get_unused_sessions_for_switch_point(current_switch_point)
         
-        if not unused_sessions:
-            # If no sessions for this switch point, use a random session
-            all_sessions = self.data_processor.sessions
-            selected_session = random.choice(all_sessions)
-        else:
-            selected_session = random.choice(unused_sessions)
-            # Mark this session as used
-            self.data_processor.mark_session_as_used(current_switch_point, selected_session)
-        
+        selected_session = random.choice(unused_sessions)
+        # Mark this session as used
+        self.data_processor.mark_session_as_used(current_switch_point, selected_session)
+    
         # Simulate the episode
         episode_length = selected_session.episode_length
         final_weight = selected_session.final_weight
@@ -97,18 +92,7 @@ class QLearningAgent(BaseRLAgent):
         Returns:
             List of training statistics for each episode
         """
-        if initial_switch_point is None:
-            current_switch_point = random.choice(self.available_switch_points)
-        else:
-            if initial_switch_point not in self.available_switch_points:
-                # If the given starting switch point is not available, 
-                # use the smallest available switching point
-                current_switch_point = min(self.available_switch_points)
-                if logger:
-                    logger.logger.info(f"Starting switch point {initial_switch_point} is not available.")
-                    logger.logger.info(f"Using smallest available switching point: {current_switch_point}")
-            else:
-                current_switch_point = initial_switch_point
+        current_switch_point = initial_switch_point
         
         self.training_history = []
         
@@ -123,11 +107,12 @@ class QLearningAgent(BaseRLAgent):
             best_switch_point = self._get_best_switch_point()
             
             # Select next action for next episode (may include exploration)
-            next_switch_point = self.select_action(current_switch_point)
+            next_switch_point, exploration_flag = self.select_action(current_switch_point)
             
-            # Determine if exploration occurred
+            # Determine if exploration occurred by checking if the selected action
+            # differs from the best action according to Q-values
             explored_switch_point = None
-            if next_switch_point != best_switch_point:
+            if exploration_flag:
                 explored_switch_point = next_switch_point
             
             # Record training statistics
@@ -142,7 +127,6 @@ class QLearningAgent(BaseRLAgent):
                 'final_weight': final_weight,
                 'q_value': self.q_table[current_switch_point],
                 'termination_type': termination_type,
-                'next_switch_point': next_switch_point
             }
             self.training_history.append(episode_stats)
             
@@ -153,7 +137,7 @@ class QLearningAgent(BaseRLAgent):
                     total_episodes=num_episodes,
                     experienced_switch_point=current_switch_point,
                     termination_type=termination_type,
-                    model_selected_next=next_switch_point,
+                    model_selected_next=best_switch_point,
                     explored_switch_point=explored_switch_point
                 )
             
@@ -189,3 +173,59 @@ class QLearningAgent(BaseRLAgent):
             'best_switch_point': self.get_optimal_switch_point(),
             'best_q_value': max(self.q_table.values())
         } 
+
+    def select_action(self, current_switch_point: Optional[int] = None) -> int:
+        """
+        Q-learning specific action selection using only available switch points.
+        
+        Args:
+            current_switch_point: Current switch point (for exploration)
+            
+        Returns:
+            Selected switch point
+        """
+        exploration_flag = False
+        if random.random() < self.exploration_rate:
+            # Exploration: step-based exploration from current switch point
+            exploration_flag = True
+            return self._explore_with_steps(current_switch_point), exploration_flag
+        else:
+            # Exploitation: choose best action based on Q-values
+            exploration_flag = False
+            return self._get_best_switch_point(), exploration_flag
+    
+    def _explore_with_steps(self, current_switch_point: int) -> int:
+        """
+        Q-learning step-based exploration from current switching point.
+        
+        Args:
+            current_switch_point: The current switching point to explore from
+            
+        Returns:
+            Selected switch point for exploration
+        """
+        print(f"DEBUG: _explore_with_steps called with current_switch_point: {current_switch_point}")
+        
+        # Get available switch points in ascending order
+        available_points = sorted(self.available_switch_points)
+        
+        # Find the current switch point index in sorted available points
+        current_index = available_points.index(current_switch_point)
+                
+        # Probabilistically select which exploration step to take
+        # Probabilities must sum to 1.0 to guarantee selection
+        random_value = random.random()
+        cumulative_prob = 0.0
+        
+        for step, prob in zip(EXPLORATION_STEPS, EXPLORATION_PROBABILITIES):
+            cumulative_prob += prob
+            if random_value <= cumulative_prob:
+                # Try to move +step from current switch point
+                target_index = current_index + step
+                if target_index < len(available_points):
+                    result = available_points[target_index]
+                    return result
+                else:
+                    # If step goes beyond available points, return the last available point
+                    result = available_points[-1]
+                    return result
