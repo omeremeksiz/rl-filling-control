@@ -11,15 +11,24 @@ from src.base_agent import BaseRLAgent
 from src.data_processor import DataProcessor
 from src.logger import TrainingLogger
 from src.reward_calculator import RewardCalculator
+from src.config import (
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_EXPLORATION_RATE,
+    DEFAULT_DISCOUNT_FACTOR,
+    DEFAULT_MC_INITIAL_Q_VALUE,
+    DEFAULT_RANDOM_SEED
+)
 
 
 class StandardQLearningAgent(BaseRLAgent):
     """Standard Q-learning agent for filling control (off-policy)."""
 
     def __init__(self, data_processor: DataProcessor, reward_calculator: RewardCalculator,
-                 learning_rate: float = 0.1, exploration_rate: float = 0.5,
-                 discount_factor: float = 0.99, initial_q_value: float = -125.0,
-                 random_seed: int = 42):
+                 learning_rate: float = DEFAULT_LEARNING_RATE, 
+                 exploration_rate: float = DEFAULT_EXPLORATION_RATE,
+                 discount_factor: float = DEFAULT_DISCOUNT_FACTOR, 
+                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
+                 random_seed: int = DEFAULT_RANDOM_SEED):
         """
         Initialize Q-learning agent.
         
@@ -34,9 +43,13 @@ class StandardQLearningAgent(BaseRLAgent):
         """
         super().__init__(data_processor, reward_calculator, exploration_rate, random_seed,
                          learning_rate, discount_factor, initial_q_value)
+        
+        # Set random seed for reproducibility
+        random.seed(random_seed)
+        
         self.q_table = self._initialize_q_table()
 
-    def _get_best_switch_point(self) -> int:
+    def _get_best_switch_point(self, current_switch_point: int = None) -> int:
         """Get the optimal switch point based on learned Q-values."""
         # Create policy from Q-values with tie-breaking rule: if equal, choose -1
         policy = self._create_policy_from_q_values_with_tie_breaking()
@@ -49,8 +62,8 @@ class StandardQLearningAgent(BaseRLAgent):
             if weight in available_weights and policy[weight] == -1:
                 return weight
         
-        # If there is no flipping (no -1 action found), continue with maximum available weight
-        return max(available_weights)
+        # If there is no flipping (no -1 action found), continue with current switch point
+        return current_switch_point
 
     def train_episode(self, current_switch_point: int) -> Tuple[float, int, int]:
         """
@@ -88,52 +101,28 @@ class StandardQLearningAgent(BaseRLAgent):
             current_state, current_action, current_reward = trajectory[i]
             next_state, next_action, next_reward = trajectory[i + 1]
             
-            # Check if we can update this state-action pair
-            can_update = True
+            # Get current Q-value
+            current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
             
-            # For slow actions (-1), only update if the state has been updated with fast action (1) at least once
-            if current_action == -1 and current_state not in self.states_with_fast_action_updated:
-                can_update = False
+            # Get maximum Q-value for next state (off-policy: max over all actions)
+            next_q_values = []
+            for action in [1, -1]:
+                next_q_values.append(self.q_table.get((next_state, action), self.initial_q_value))
+            max_next_q = max(next_q_values) if next_q_values else 0.0
             
-            if can_update:
-                # Get current Q-value
-                current_q = self.q_table.get((current_state, current_action), self.initial_q_value)
-                
-                # Get maximum Q-value for next state (off-policy: max over all actions)
-                next_q_values = []
-                for action in [1, -1]:
-                    next_q_values.append(self.q_table.get((next_state, action), self.initial_q_value))
-                max_next_q = max(next_q_values) if next_q_values else 0.0
-                
-                # Q-learning update: Q(s,a) = Q(s,a) + α[r + γ*max_Q(s',a') - Q(s,a)]
-                q_target = current_reward + self.discount_factor * max_next_q
-                self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (q_target - current_q)
-                
-                # Track that this state has been updated with action 1
-                if current_action == 1:
-                    self.states_with_fast_action_updated.add(current_state)
+            # Q-learning update: Q(s,a) = Q(s,a) + α[r + γ*max_Q(s',a') - Q(s,a)]
+            q_target = current_reward + self.discount_factor * max_next_q
+            self.q_table[(current_state, current_action)] = current_q + self.learning_rate * (q_target - current_q)
         
         # Handle the last step (terminal state)
         if trajectory:
             last_state, last_action, last_reward = trajectory[-1]
             
-            # Check if we can update this state-action pair
-            can_update = True
+            current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
             
-            # For slow actions (-1), only update if the state has been updated with fast action (1) at least once
-            if last_action == -1 and last_state not in self.states_with_fast_action_updated:
-                can_update = False
-            
-            if can_update:
-                current_q = self.q_table.get((last_state, last_action), self.initial_q_value)
-                
-                # For terminal state, next Q-value is 0
-                q_target = last_reward  # No next state
-                self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (q_target - current_q)
-                
-                # Track that this state has been updated with action 1
-                if last_action == 1:
-                    self.states_with_fast_action_updated.add(last_state)
+            # For terminal state, next Q-value is 0
+            q_target = last_reward  # No next state
+            self.q_table[(last_state, last_action)] = current_q + self.learning_rate * (q_target - current_q)
 
     def train(self, num_episodes: int, initial_switch_point: Optional[int] = None, logger: Optional[TrainingLogger] = None) -> List[Dict[str, Any]]:
         """

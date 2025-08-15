@@ -34,7 +34,7 @@ class QLearningAgent(BaseRLAgent):
         """Initialize Q-table with zero values for all available switch points."""
         return {switch_point: 0.0 for switch_point in self.available_switch_points}
     
-    def _get_best_switch_point(self) -> int:
+    def _get_best_switch_point(self, current_switch_point: int = None) -> int:
         """Get the switch point with the highest Q-value."""
         best_switch_point = max(self.q_table, key=self.q_table.get)
         return best_switch_point

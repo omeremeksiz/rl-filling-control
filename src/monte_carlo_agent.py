@@ -32,7 +32,7 @@ class MonteCarloAgent(BaseRLAgent):
         # Initialize Q-table for state-action pairs
         self.q_table = self._initialize_q_table()
     
-    def _get_best_switch_point(self) -> int:
+    def _get_best_switch_point(self, current_switch_point: int = None) -> int:
         """Get the optimal switch point based on learned Q-values."""
         # Create policy from Q-values with tie-breaking rule: if equal, choose -1
         policy = self._create_policy_from_q_values_with_tie_breaking()
@@ -45,8 +45,8 @@ class MonteCarloAgent(BaseRLAgent):
             if weight in available_weights and policy[weight] == -1:
                 return weight
         
-        # If there is no flipping (no -1 action found), continue with maximum available weight
-        return max(available_weights)
+        # If there is no flipping (no -1 action found), continue with current switch point
+        return current_switch_point
     
     def train_episode(self, current_switch_point: int) -> Tuple[float, int, int]:
         """
@@ -66,7 +66,7 @@ class MonteCarloAgent(BaseRLAgent):
     
     def _get_step_reward(self) -> float:
         """Monte Carlo uses no step penalty, only final outcome matters."""
-        return 0.0
+        return -1.0
     
     def _update_q_values_from_episode(self, episode: List[Tuple[int, int, float]]) -> None:
         """Update Q-values using Monte Carlo method."""

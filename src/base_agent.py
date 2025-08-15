@@ -8,6 +8,13 @@ from typing import Dict, List, Optional, Tuple
 import random
 from data_processor import DataProcessor, FillingSession
 from reward_calculator import RewardCalculator
+from config import (
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_EXPLORATION_RATE,
+    DEFAULT_DISCOUNT_FACTOR,
+    DEFAULT_MC_INITIAL_Q_VALUE,
+    DEFAULT_RANDOM_SEED
+)
 from config import EXPLORATION_STEPS, EXPLORATION_PROBABILITIES
 
 
@@ -17,11 +24,11 @@ class BaseRLAgent(ABC):
     def __init__(self, 
                  data_processor: DataProcessor,
                  reward_calculator: RewardCalculator,
-                 exploration_rate: float = 0.5,
-                 random_seed: int = 42,
-                 learning_rate: float = 0.1,
-                 discount_factor: float = 0.99,
-                 initial_q_value: float = -125.0):
+                 exploration_rate: float = DEFAULT_EXPLORATION_RATE,
+                 random_seed: int = DEFAULT_RANDOM_SEED,
+                 learning_rate: float = DEFAULT_LEARNING_RATE,
+                 discount_factor: float = DEFAULT_DISCOUNT_FACTOR,
+                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE):
         """
         Initialize the base agent.
         
@@ -116,11 +123,11 @@ class BaseRLAgent(ABC):
         if random.random() < self.exploration_rate:
             # Exploration: step-based exploration
             exploration_flag = True
-            return self._explore_with_steps(), exploration_flag
+            return self._explore_with_steps(current_switch_point), exploration_flag
         else:
             # Exploitation: choose best action with bounds checking
             exploration_flag = False
-            best_switch_point = self._get_best_switch_point()
+            best_switch_point = self._get_best_switch_point(current_switch_point)
             
             # Check if best switch point is in available points
             if best_switch_point not in self.available_switch_points:
@@ -129,7 +136,7 @@ class BaseRLAgent(ABC):
             
             return best_switch_point, exploration_flag
     
-    def _explore_with_steps(self) -> int:
+    def _explore_with_steps(self, current_switch_point: int = None) -> int:
         """
         Explore using step-based exploration from best action.
         Only explores in positive direction (higher switch points).
@@ -138,7 +145,7 @@ class BaseRLAgent(ABC):
         Returns:
             Selected switch point for exploration
         """
-        best_switch_point = self._get_best_switch_point()
+        best_switch_point = self._get_best_switch_point(current_switch_point)
         
         # Get available switch points in ascending order
         available_points = sorted(self.available_switch_points)
@@ -168,7 +175,7 @@ class BaseRLAgent(ABC):
                     return available_points[-1]
     
     @abstractmethod
-    def _get_best_switch_point(self) -> int:
+    def _get_best_switch_point(self, current_switch_point: int = None) -> int:
         """
         Get the best switch point based on the agent's learned policy.
         This method should be implemented by each agent.
@@ -264,7 +271,7 @@ class BaseRLAgent(ABC):
                 
                 # If equal Q-values or slow is better, choose slow (-1)
                 # If fast is strictly better, choose fast (1)
-                if q_slow >= q_fast:
+                if q_slow > q_fast:
                     policy[weight] = -1
                 else:
                     policy[weight] = 1
@@ -400,7 +407,7 @@ class BaseRLAgent(ABC):
             termination_type = self._determine_termination_type(final_weight)
             
             # Get what model would select for next episode (without exploration)
-            model_selected_next_switch_point = self._get_best_switch_point()
+            model_selected_next_switch_point = self._get_best_switch_point(current_switch_point)
             
             # Select next action for next episode (may include exploration)
             next_switch_point, exploration_flag = self.select_action(current_switch_point)
