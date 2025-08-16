@@ -196,31 +196,7 @@ class TrainingVisualizer:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
     
-    def plot_cluster_histogram(self, save_path: str = None) -> None:
-        """
-        Plot histogram of cluster sizes (switching point distribution).
-        
-        Args:
-            save_path: Optional path to save the plot
-        """
-        sessions = self.data_processor.sessions
-        
-        if not sessions:
-            print("No sessions to analyze.")
-            return
-        
-        switch_points = [s.switch_point for s in sessions if s.switch_point is not None]
-        
-        plt.figure(figsize=(10, 6), dpi=300)
-        plt.hist(switch_points, bins=20, alpha=0.7, color='blue', edgecolor='black')
-        plt.title('Histogram of Cluster Sizes')
-        plt.xlabel('Switching Point')
-        plt.ylabel('Number of Fillings')
-        plt.grid(True, alpha=0.3)
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
+
     
     def print_training_summary(self, training_history: List[Dict]) -> None:
         """Print a summary of training results."""

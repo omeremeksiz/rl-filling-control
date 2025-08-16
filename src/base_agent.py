@@ -13,7 +13,11 @@ from config import (
     DEFAULT_EXPLORATION_RATE,
     DEFAULT_DISCOUNT_FACTOR,
     DEFAULT_MC_INITIAL_Q_VALUE,
-    DEFAULT_RANDOM_SEED
+    DEFAULT_RANDOM_SEED,
+    DEFAULT_EXPLORATION_DECAY,
+    DEFAULT_EXPLORATION_MIN_RATE,
+    DEFAULT_EXPLORATION_DECAY_RATE,
+    DEFAULT_EXPLORATION_DECAY_INTERVAL
 )
 from config import EXPLORATION_STEPS, EXPLORATION_PROBABILITIES
 
@@ -28,26 +32,41 @@ class BaseRLAgent(ABC):
                  random_seed: int = DEFAULT_RANDOM_SEED,
                  learning_rate: float = DEFAULT_LEARNING_RATE,
                  discount_factor: float = DEFAULT_DISCOUNT_FACTOR,
-                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE):
+                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
+                 exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
+                 exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
+                 exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
+                 exploration_decay_interval: int = DEFAULT_EXPLORATION_DECAY_INTERVAL):
         """
         Initialize the base agent.
         
         Args:
             data_processor: Data processor for loading and managing data
             reward_calculator: Reward calculator for computing rewards
-            exploration_rate: Rate of exploration vs exploitation
+            exploration_rate: Initial rate of exploration vs exploitation
             random_seed: Random seed for reproducibility
             learning_rate: Learning rate for Q-value updates
             discount_factor: Discount factor for future rewards
             initial_q_value: Initial Q-value for state-action pairs
+            exploration_decay: Whether to use exploration decay
+            exploration_min_rate: Minimum exploration rate
+            exploration_decay_rate: Decay factor when decay occurs
+            exploration_decay_interval: Decay every N episodes
         """
         self.data_processor = data_processor
         self.reward_calculator = reward_calculator
+        self.initial_exploration_rate = exploration_rate
         self.exploration_rate = exploration_rate
         self.random_seed = random_seed
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.initial_q_value = initial_q_value
+        
+        # Exploration decay parameters
+        self.exploration_decay = exploration_decay
+        self.exploration_min_rate = exploration_min_rate
+        self.exploration_decay_rate = exploration_decay_rate
+        self.exploration_decay_interval = exploration_decay_interval
         
         # Get available switch points for action selection
         self.available_switch_points = data_processor.get_available_switch_points()
@@ -108,6 +127,19 @@ class BaseRLAgent(ABC):
             'training_history': self.training_history,
             'method': self.__class__.__name__
         }
+    
+    def update_exploration_rate(self, episode: int) -> None:
+        """
+        Update exploration rate using exponential decay at specified intervals.
+        
+        Args:
+            episode: Current episode number (0-based)
+        """
+        if self.exploration_decay and episode > 0 and episode % self.exploration_decay_interval == 0:
+            self.exploration_rate = max(
+                self.exploration_min_rate,
+                self.exploration_rate * self.exploration_decay_rate
+            )
     
     def select_action(self, current_switch_point: Optional[int] = None) -> int:
         """
@@ -400,6 +432,9 @@ class BaseRLAgent(ABC):
         current_switch_point = initial_switch_point
         
         for episode in range(num_episodes):
+            # Update exploration rate using decay
+            self.update_exploration_rate(episode)
+            
             # Train on one episode using common logic
             episode_length, final_weight = self.train_episode(current_switch_point)
             
@@ -426,7 +461,8 @@ class BaseRLAgent(ABC):
                 'explored_switching_point': explored_switch_point,
                 'episode_length': episode_length,
                 'final_weight': final_weight,
-                'termination_type': termination_type
+                'termination_type': termination_type,
+                'exploration_rate': self.exploration_rate
             }
             
             self.training_history.append(episode_data)

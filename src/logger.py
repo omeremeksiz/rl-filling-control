@@ -67,7 +67,6 @@ class TrainingLogger:
         # Output paths
         self.logger.info("[OUTPUT_PATHS]")
         output_paths = {
-            'cluster_histogram_path': os.path.join(self.output_dir, "cluster_histogram.png"),
             'qvalue_vs_state_path': os.path.join(self.output_dir, "qvalue_vs_state.png"),
             'switching_point_trajectory_path': os.path.join(self.output_dir, "switching_point_trajectory.png"),
             'log_file_path': self.log_file_path
@@ -273,7 +272,6 @@ class TrainingLogger:
     def get_output_paths(self) -> Dict[str, str]:
         """Get all output file paths."""
         return {
-            'cluster_histogram_path': os.path.join(self.output_dir, "cluster_histogram.png"),
             'qvalue_vs_state_path': os.path.join(self.output_dir, "qvalue_vs_state.png"),
             'switching_point_trajectory_path': os.path.join(self.output_dir, "switching_point_trajectory.png"),
             'log_file_path': self.log_file_path

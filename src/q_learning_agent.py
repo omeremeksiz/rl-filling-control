@@ -6,7 +6,12 @@ Implements stateless reinforcement learning for container filling control.
 import numpy as np
 import random
 from typing import Dict, List, Optional, Tuple
-from config import DEFAULT_LEARNING_RATE, DEFAULT_EXPLORATION_RATE, DEFAULT_RANDOM_SEED, EXPLORATION_STEPS, EXPLORATION_PROBABILITIES
+from config import (
+    DEFAULT_LEARNING_RATE, DEFAULT_EXPLORATION_RATE, DEFAULT_RANDOM_SEED, 
+    EXPLORATION_STEPS, EXPLORATION_PROBABILITIES,
+    DEFAULT_EXPLORATION_DECAY, DEFAULT_EXPLORATION_MIN_RATE,
+    DEFAULT_EXPLORATION_DECAY_RATE, DEFAULT_EXPLORATION_DECAY_INTERVAL
+)
 from data_processor import DataProcessor, FillingSession
 from reward_calculator import RewardCalculator
 from base_agent import BaseRLAgent
@@ -20,8 +25,16 @@ class QLearningAgent(BaseRLAgent):
                  reward_calculator: RewardCalculator,
                  learning_rate: float = DEFAULT_LEARNING_RATE,
                  exploration_rate: float = DEFAULT_EXPLORATION_RATE,
-                 random_seed: int = DEFAULT_RANDOM_SEED):
-        super().__init__(data_processor, reward_calculator, exploration_rate, random_seed)
+                 random_seed: int = DEFAULT_RANDOM_SEED,
+                 exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
+                 exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
+                 exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
+                 exploration_decay_interval: int = DEFAULT_EXPLORATION_DECAY_INTERVAL):
+        super().__init__(data_processor, reward_calculator, exploration_rate, random_seed, 
+                         learning_rate, exploration_decay=exploration_decay,
+                         exploration_min_rate=exploration_min_rate,
+                         exploration_decay_rate=exploration_decay_rate,
+                         exploration_decay_interval=exploration_decay_interval)
         self.learning_rate = learning_rate
         
         # Set random seed for reproducibility
@@ -97,6 +110,9 @@ class QLearningAgent(BaseRLAgent):
         self.training_history = []
         
         for episode in range(num_episodes):
+            # Update exploration rate using decay
+            self.update_exploration_rate(episode)
+            
             # Train on current episode
             reward, episode_length, final_weight = self.train_episode(current_switch_point)
             
@@ -127,6 +143,7 @@ class QLearningAgent(BaseRLAgent):
                 'final_weight': final_weight,
                 'q_value': self.q_table[current_switch_point],
                 'termination_type': termination_type,
+                'exploration_rate': self.exploration_rate
             }
             self.training_history.append(episode_stats)
             
@@ -162,6 +179,18 @@ class QLearningAgent(BaseRLAgent):
     def get_q_table(self) -> Dict[int, float]:
         """Get the current Q-table."""
         return self.q_table.copy()
+    
+    def _get_step_reward(self) -> float:
+        """Q-learning doesn't use step rewards, only final episode rewards."""
+        return 0.0
+    
+    def _update_q_values_from_episode(self, episode: List[Tuple[int, int, float]]) -> None:
+        """Q-learning doesn't use episode trajectories, uses direct Q-value updates."""
+        pass
+    
+    def _update_q_values(self, *args, **kwargs) -> None:
+        """Q-learning uses _update_q_value method instead."""
+        pass
     
     def get_training_statistics(self) -> Dict:
         """Get statistics about the training process."""

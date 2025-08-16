@@ -6,7 +6,12 @@ Implements Monte Carlo method for container filling control.
 import numpy as np
 import random
 from typing import Dict, List, Optional, Tuple
-from config import DEFAULT_LEARNING_RATE, DEFAULT_EXPLORATION_RATE, DEFAULT_RANDOM_SEED, DEFAULT_DISCOUNT_FACTOR, DEFAULT_MC_INITIAL_Q_VALUE
+from config import (
+    DEFAULT_LEARNING_RATE, DEFAULT_EXPLORATION_RATE, DEFAULT_RANDOM_SEED, 
+    DEFAULT_DISCOUNT_FACTOR, DEFAULT_MC_INITIAL_Q_VALUE,
+    DEFAULT_EXPLORATION_DECAY, DEFAULT_EXPLORATION_MIN_RATE,
+    DEFAULT_EXPLORATION_DECAY_RATE, DEFAULT_EXPLORATION_DECAY_INTERVAL
+)
 from data_processor import DataProcessor, FillingSession
 from reward_calculator import RewardCalculator
 from base_agent import BaseRLAgent
@@ -22,9 +27,14 @@ class MonteCarloAgent(BaseRLAgent):
                  exploration_rate: float = DEFAULT_EXPLORATION_RATE,
                  discount_factor: float = DEFAULT_DISCOUNT_FACTOR,
                  initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
-                 random_seed: int = DEFAULT_RANDOM_SEED):
+                 random_seed: int = DEFAULT_RANDOM_SEED,
+                 exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
+                 exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
+                 exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
+                 exploration_decay_interval: int = DEFAULT_EXPLORATION_DECAY_INTERVAL):
         super().__init__(data_processor, reward_calculator, exploration_rate, random_seed, 
-                         learning_rate, discount_factor, initial_q_value)
+                         learning_rate, discount_factor, initial_q_value,
+                         exploration_decay, exploration_min_rate, exploration_decay_rate, exploration_decay_interval)
         
         # Set random seed for reproducibility
         random.seed(random_seed)

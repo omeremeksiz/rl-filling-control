@@ -9,7 +9,9 @@ from config import (
     DATA_FILE_PATH, DEFAULT_TRAINING_EPISODES, DEFAULT_LEARNING_RATE, 
     DEFAULT_EXPLORATION_RATE, DEFAULT_SAFE_WEIGHT_MIN, DEFAULT_SAFE_WEIGHT_MAX,
     DEFAULT_RANDOM_SEED, DEFAULT_STARTING_SWITCH_POINT, DEFAULT_RL_METHOD,
-    DEFAULT_OVERFLOW_PENALTY_CONSTANT, DEFAULT_UNDERFLOW_PENALTY_CONSTANT
+    DEFAULT_OVERFLOW_PENALTY_CONSTANT, DEFAULT_UNDERFLOW_PENALTY_CONSTANT,
+    DEFAULT_EXPLORATION_DECAY, DEFAULT_EXPLORATION_MIN_RATE,
+    DEFAULT_EXPLORATION_DECAY_RATE, DEFAULT_EXPLORATION_DECAY_INTERVAL
 )
 from data_processor import DataProcessor
 from reward_calculator import RewardCalculator
@@ -31,7 +33,11 @@ class FillingControlSystem:
                  starting_switch_point: Optional[int] = DEFAULT_STARTING_SWITCH_POINT,
                  overflow_penalty_constant: float = DEFAULT_OVERFLOW_PENALTY_CONSTANT,
                  underflow_penalty_constant: float = DEFAULT_UNDERFLOW_PENALTY_CONSTANT,
-                 rl_method: str = DEFAULT_RL_METHOD):
+                 rl_method: str = DEFAULT_RL_METHOD,
+                 exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
+                 exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
+                 exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
+                 exploration_decay_interval: int = DEFAULT_EXPLORATION_DECAY_INTERVAL):
         """
         Initialize the filling control system.
         
@@ -40,7 +46,11 @@ class FillingControlSystem:
             safe_weight_min: Minimum safe weight
             safe_weight_max: Maximum safe weight
             learning_rate: Q-learning learning rate
-            exploration_rate: Exploration rate for epsilon-greedy policy
+            exploration_rate: Initial exploration rate for epsilon-greedy policy
+            exploration_decay: Whether to use exploration decay
+            exploration_min_rate: Minimum exploration rate
+            exploration_decay_rate: Decay factor when decay occurs
+            exploration_decay_interval: Decay every N episodes
         """
         self.data_file_path = data_file_path
         self.safe_weight_min = safe_weight_min
@@ -52,6 +62,10 @@ class FillingControlSystem:
         self.overflow_penalty_constant = overflow_penalty_constant
         self.underflow_penalty_constant = underflow_penalty_constant
         self.rl_method = rl_method
+        self.exploration_decay = exploration_decay
+        self.exploration_min_rate = exploration_min_rate
+        self.exploration_decay_rate = exploration_decay_rate
+        self.exploration_decay_interval = exploration_decay_interval
         
         # Initialize components
         self.data_processor = None
@@ -84,7 +98,11 @@ class FillingControlSystem:
                 reward_calculator=self.reward_calculator,
                 learning_rate=self.learning_rate,
                 exploration_rate=self.exploration_rate,
-                random_seed=self.random_seed
+                random_seed=self.random_seed,
+                exploration_decay=self.exploration_decay,
+                exploration_min_rate=self.exploration_min_rate,
+                exploration_decay_rate=self.exploration_decay_rate,
+                exploration_decay_interval=self.exploration_decay_interval
             )
             
             # Initialize visualizer
@@ -157,13 +175,7 @@ class FillingControlSystem:
         else:
             self.visualizer.plot_switching_point_trajectory(training_history)
         
-        # Plot 2: Cluster histogram
-        if save_plots:
-            self.visualizer.plot_cluster_histogram(output_paths['cluster_histogram_path'])
-        else:
-            self.visualizer.plot_cluster_histogram()
-        
-        # Plot 3: Q-value vs state
+        # Plot 2: Q-value vs state
         if save_plots:
             self.visualizer.plot_q_value_vs_state(output_paths['qvalue_vs_state_path'])
         else:
