@@ -14,15 +14,17 @@ This document explains the four reinforcement learning methods implemented in ou
 ### Reward Structure
 ```
 For MAB (Multi-Armed Bandit):
-  - Safe: -length
-  - Overflow: -length + overflow_penalty × (final_weight - safe_min)
-  - Underflow: -length + (safe_min - final_weight) × underflow_penalty
+  - Safe: -episode_length
+  - Overflow: -episode_length + overflow_penalty × (final_weight - safe_max)
+  - Underflow: -episode_length + underflow_penalty × (safe_min - final_weight)
 
-For other methods (MC, TD, Q-Learning):
-  - Safe: -1 (time penalty per step)
-  - Overflow: (final_weight - safe_min) × overflow_penalty
-  - Underflow: (safe_min - final_weight) × underflow_penalty
-  - Total Reward = -1 + penalty
+For Monte Carlo (MC):
+  - Step reward: -1.0 per step
+  - Final reward: penalty only (overflow/underflow based on safe_max/safe_min)
+
+For TD and Q-Learning:
+  - Step reward: 0.0 per step  
+  - Final reward: penalty only (overflow/underflow based on safe_max/safe_min)
 ```
 
 ## Method Comparison Overview
@@ -58,9 +60,9 @@ best_switch_point = argmax Q(switch_point)
 
 ### Reward Structure
 ```
-Safe: -length
-Overflow: -length + overflow_penalty × (final_weight - safe_min)
-Underflow: -length + (safe_min - final_weight) × underflow_penalty
+Safe: -episode_length
+Overflow: -episode_length + overflow_penalty × (final_weight - safe_max)
+Underflow: -episode_length + underflow_penalty × (safe_min - final_weight)
 ```
 
 ### Characteristics
@@ -87,8 +89,8 @@ For each state-action pair in an episode:
 G(s,a) = r_t + γ×r_{t+1} + γ²×r_{t+2} + ... + γ^T×r_T
 ```
 Where:
-- `r_t = -1` (intermediate steps)
-- `r_T = -1 + penalty` (final step)
+- `r_t = -1.0` (intermediate steps)
+- `r_T = -1.0 + penalty` (final step)
 - `γ = 0.99` (discount factor)
 
 ### Q-value Update
@@ -132,7 +134,7 @@ Q(s,a) = Q(s,a) + α × [r + γ×Q(s',a') - Q(s,a)]
 Where:
 - `s'` = next state (weight)
 - `a'` = **actual next action taken** (on-policy)
-- `r = -1` (intermediate) or `-1 + penalty` (final)
+- `r = 0.0` (intermediate) or `penalty` (final)
 
 ### Policy
 Same extraction method as Monte Carlo.
@@ -159,6 +161,7 @@ Q(s,a) = Q(s,a) + α × [r + γ×max_a'Q(s',a') - Q(s,a)]
 ```
 Where:
 - `max_a'Q(s',a')` = **best possible next action** (off-policy)
+- `r = 0.0` (intermediate) or `penalty` (final)
 - Always optimistic about future rewards
 
 ### Policy
@@ -202,7 +205,7 @@ def calculate_reward(episode_length, final_weight, method="standard"):
         base_reward = -episode_length
         
         if final_weight > safe_max:  # Overflow
-            penalty = (final_weight - safe_min) × overflow_penalty_constant
+            penalty = (final_weight - safe_max) × overflow_penalty_constant
         elif final_weight < safe_min:  # Underflow  
             penalty = (safe_min - final_weight) × underflow_penalty_constant
         else:  # Safe
@@ -210,16 +213,15 @@ def calculate_reward(episode_length, final_weight, method="standard"):
             
         return base_reward + penalty
     else:
-        # Standard reward calculation for other methods
-        base_reward = -1.0  # Time penalty per step
+        # Standard final reward calculation (step rewards handled separately)
         penalty = 0.0
         
         if final_weight > safe_max:  # Overflow
-            penalty = (final_weight - safe_min) × overflow_penalty_constant
+            penalty = (final_weight - safe_max) × overflow_penalty_constant
         elif final_weight < safe_min:  # Underflow  
             penalty = (safe_min - final_weight) × underflow_penalty_constant
             
-        return base_reward + penalty
+        return penalty  # Step rewards: MC=-1.0, TD/Q-Learning=0.0
 ```
 
 ### Data Processing

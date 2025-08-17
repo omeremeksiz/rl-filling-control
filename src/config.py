@@ -14,7 +14,7 @@ DEFAULT_RANDOM_SEED = 42
 DEFAULT_STARTING_SWITCH_POINT = 45.0
 
 # Exploration decay parameters
-DEFAULT_EXPLORATION_DECAY = True  # Whether to use exploration decay
+DEFAULT_EXPLORATION_DECAY = False  # Whether to use exploration decay
 DEFAULT_EXPLORATION_MIN_RATE = 0.01  # Minimum exploration rate
 DEFAULT_EXPLORATION_DECAY_RATE = 0.995  # Decay factor when decay occurs
 DEFAULT_EXPLORATION_DECAY_INTERVAL = 10  # Decay every N episodes
@@ -35,4 +35,4 @@ EXPLORATION_PROBABILITIES = [0.33, 0.27, 0.20, 0.13, 0.07]  # Must sum to 1.0 fo
 
 # Method-specific parameters (used by MC, TD, and Q-learning)
 DEFAULT_DISCOUNT_FACTOR = 0.99
-DEFAULT_MC_INITIAL_Q_VALUE = -300.0  # Also used as initial Q-value for TD and Q-learning 
+DEFAULT_MC_INITIAL_Q_VALUE = -200.0  # Also used as initial Q-value for TD and Q-learning 

@@ -24,9 +24,8 @@ python main.py --method [mab|mc|td|qlearning] --episodes [number]
 ```
 src/                    # Core source code directory
 ├── Core System
-│   ├── main.py         # Entry point and CLI argument parsing
 │   ├── config.py       # Global configuration parameters
-│   └── filling_control_system.py  # Main orchestrator class
+│   └── filling_control_system.py  # Main orchestrator class with CLI
 ├── RL Agents
 │   ├── base_agent.py              # Abstract base class for all RL methods
 │   ├── agent_factory.py           # Factory for creating different agents
@@ -41,9 +40,10 @@ src/                    # Core source code directory
     ├── logger.py                  # Training progress logging
     └── visualizer.py              # Plotting and visualization
     
+main.py         # Entry point (delegates to src/)
+notebooks/      # Data analysis and visualization notebooks
 output/         # Training results (auto-generated)
 data/           # Input data directory
-main.py         # Main entry point
 METHODS.md      # Detailed method documentation
 requirements.txt # Python dependencies
 ```
@@ -51,7 +51,7 @@ requirements.txt # Python dependencies
 ### File Responsibilities
 
 #### Core System
-- **`main.py`**: Simple entry point that delegates to `filling_control_system.py`
+- **`main.py`**: Simple entry point that delegates to `src/filling_control_system.py`
 - **`config.py`**: Centralized configuration including learning rates, exploration parameters, reward penalties, and file paths
 - **`filling_control_system.py`**: Main orchestrator that coordinates data loading, agent creation, training, logging, and visualization
 
@@ -99,4 +99,5 @@ Results saved to `output/{timestamp}/`:
 - `training_process.log` - training logs
 - `qvalue_vs_state.png` - Q-value plots  
 - `switching_point_trajectory.png` - learning progress
-- `cluster_histogram.png` - switch point distribution 
+
+**Notebooks**: Analysis and visualizations available in `notebooks/` directory 
