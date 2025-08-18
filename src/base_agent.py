@@ -12,7 +12,7 @@ from config import (
     DEFAULT_LEARNING_RATE,
     DEFAULT_EXPLORATION_RATE,
     DEFAULT_DISCOUNT_FACTOR,
-    DEFAULT_MC_INITIAL_Q_VALUE,
+    DEFAULT_INITIAL_Q_VALUE,
     DEFAULT_RANDOM_SEED,
     DEFAULT_EXPLORATION_DECAY,
     DEFAULT_EXPLORATION_MIN_RATE,
@@ -32,7 +32,7 @@ class BaseRLAgent(ABC):
                  random_seed: int = DEFAULT_RANDOM_SEED,
                  learning_rate: float = DEFAULT_LEARNING_RATE,
                  discount_factor: float = DEFAULT_DISCOUNT_FACTOR,
-                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
+                 initial_q_value: float = DEFAULT_INITIAL_Q_VALUE,
                  exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
                  exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
                  exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
@@ -467,7 +467,17 @@ class BaseRLAgent(ABC):
             
             self.training_history.append(episode_data)
             
-            # Log progress
+            # Show progress to console (same format as log)
+            if (episode + 1) % 100 == 0 or episode == 0:  # Every 100 episodes + first episode
+                explored_point = next_switch_point if exploration_flag else None
+                print(f"--- Episode {episode + 1}/{num_episodes} ---")
+                print(f"Experienced Switching Point: {current_switch_point}")
+                print(f"Termination Type: {termination_type}")
+                print(f"Model-Selected Next Switching Point: {model_selected_next_switch_point}")
+                print(f"Explored Switching Point: {explored_point}")
+                print()
+            
+            # Log progress to file
             if logger:
                 logger.log_episode(episode + 1, num_episodes, current_switch_point, termination_type, model_selected_next_switch_point, explored_switch_point)
             

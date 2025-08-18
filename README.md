@@ -10,13 +10,39 @@ Find optimal switching point from fast to slow filling mode to:
 
 ## Usage
 
+### Quick Start
 ```bash
 pip install -r requirements.txt
-python main.py --method [mab|mc|td|qlearning] --episodes [number]
+
+# Training mode (set DEFAULT_OPERATION_MODE = "train" in config.py)
+python main.py
+
+# Testing mode (set DEFAULT_OPERATION_MODE = "test" in config.py)  
+python main.py
+```
+
+### Configuration-Based Operation
+The system operates based on `src/config.py` settings:
+
+**Training Mode**:
+- Set `DEFAULT_OPERATION_MODE = "train"`
+- Configure RL method, episodes, learning parameters
+- Run: `python main.py`
+
+**Testing Mode**:
+- Set `DEFAULT_OPERATION_MODE = "test"`
+- Configure device IP, ports, switching points
+- Run: `python main.py`
+
+### Optional CLI Overrides
+```bash
+# Override method and episodes
+python main.py --method qlearning --episodes 1000
 ```
 
 **Methods**: MAB, Monte Carlo, TD, Q-Learning  
-**Details**: See [METHODS.md](METHODS.md)
+**Real-World Testing**: See [TEST.md](TEST.md)  
+**Method Details**: See [METHODS.md](METHODS.md)
 
 ## Code Structure
 
@@ -35,7 +61,13 @@ src/                    # Core source code directory
 │   └── qlearning_standard_agent.py # Standard Q-Learning implementation
 ├── Data & Rewards
 │   ├── data_processor.py          # Excel data loading and preprocessing
+│   ├── real_data_processor.py     # Real-world data preprocessing
 │   └── reward_calculator.py       # Reward computation logic
+├── Real-World Testing
+│   ├── tcp_client.py              # TCP communication with device
+│   ├── modbus_client.py           # Modbus communication for switching points
+│   ├── database_handler.py        # Database operations for episodes
+│   └── real_world_tester.py       # Real-world testing orchestrator
 └── Utilities
     ├── logger.py                  # Training progress logging
     └── visualizer.py              # Plotting and visualization
@@ -45,6 +77,7 @@ notebooks/      # Data analysis and visualization notebooks
 output/         # Training results (auto-generated)
 data/           # Input data directory
 METHODS.md      # Detailed method documentation
+TEST.md         # Real-world testing guide
 requirements.txt # Python dependencies
 ```
 
@@ -65,7 +98,14 @@ requirements.txt # Python dependencies
 
 #### Data Processing & Rewards
 - **`data_processor.py`**: Handles Excel file loading, session parsing, and extraction of switch points and final weights
+- **`real_data_processor.py`**: Processes real-world device data and converts it to model format
 - **`reward_calculator.py`**: Computes rewards based on episode length and safety constraints (overflow/underflow penalties)
+
+#### Real-World Testing
+- **`tcp_client.py`**: TCP communication client for receiving filling data from physical device
+- **`modbus_client.py`**: Modbus communication client for sending switching points to device
+- **`database_handler.py`**: Database operations for storing real-world episodes and statistics
+- **`real_world_tester.py`**: Orchestrates real-world testing sessions with device communication
 
 #### Utilities
 - **`logger.py`**: Manages training progress logging, file output, and experiment tracking
@@ -92,6 +132,15 @@ Excel file with filling sessions:
 ## Configuration
 
 Edit `src/config.py` for parameters like learning rate, exploration rate, episodes, and penalties.
+
+### Real-World Testing
+
+1. Set `DEFAULT_OPERATION_MODE = "test"` in `src/config.py`
+2. Configure device IP/ports
+3. Install: `pip install pymodbus mysql-connector-python`
+4. Run: `python main.py`
+
+**Setup Guide**: See [TEST.md](TEST.md)
 
 ## Output
 

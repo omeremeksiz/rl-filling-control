@@ -37,15 +37,29 @@ class TrainingLogger:
     
     def _setup_logging(self) -> None:
         """Setup logging configuration."""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(self.log_file_path),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
+        # Create a unique logger for this training session
+        logger_name = f"training_{self.training_id}"
+        self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(logging.INFO)
+        
+        # Clear any existing handlers
+        self.logger.handlers.clear()
+        
+        # Create formatter
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        
+        # File handler
+        file_handler = logging.FileHandler(self.log_file_path)
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+        
+        # Console handler (optional - we already have console output)
+        # console_handler = logging.StreamHandler()
+        # console_handler.setFormatter(formatter)
+        # self.logger.addHandler(console_handler)
+        
+        # Prevent propagation to root logger
+        self.logger.propagate = False
     
     def _log_initial_info(self) -> None:
         """Log initial training information."""

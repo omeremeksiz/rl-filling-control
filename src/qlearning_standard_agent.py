@@ -15,8 +15,12 @@ from src.config import (
     DEFAULT_LEARNING_RATE,
     DEFAULT_EXPLORATION_RATE,
     DEFAULT_DISCOUNT_FACTOR,
-    DEFAULT_MC_INITIAL_Q_VALUE,
-    DEFAULT_RANDOM_SEED
+    DEFAULT_INITIAL_Q_VALUE,
+    DEFAULT_RANDOM_SEED,
+    DEFAULT_EXPLORATION_DECAY,
+    DEFAULT_EXPLORATION_MIN_RATE,
+    DEFAULT_EXPLORATION_DECAY_RATE,
+    DEFAULT_EXPLORATION_DECAY_INTERVAL
 )
 
 
@@ -27,8 +31,12 @@ class StandardQLearningAgent(BaseRLAgent):
                  learning_rate: float = DEFAULT_LEARNING_RATE, 
                  exploration_rate: float = DEFAULT_EXPLORATION_RATE,
                  discount_factor: float = DEFAULT_DISCOUNT_FACTOR, 
-                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
-                 random_seed: int = DEFAULT_RANDOM_SEED):
+                 initial_q_value: float = DEFAULT_INITIAL_Q_VALUE,
+                 random_seed: int = DEFAULT_RANDOM_SEED,
+                 exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
+                 exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,
+                 exploration_decay_rate: float = DEFAULT_EXPLORATION_DECAY_RATE,
+                 exploration_decay_interval: int = DEFAULT_EXPLORATION_DECAY_INTERVAL):
         """
         Initialize Q-learning agent.
         
@@ -40,9 +48,14 @@ class StandardQLearningAgent(BaseRLAgent):
             discount_factor: Discount factor (γ)
             initial_q_value: Initial Q-value for all state-action pairs
             random_seed: Random seed for reproducibility
+            exploration_decay: Whether to use exploration decay
+            exploration_min_rate: Minimum exploration rate
+            exploration_decay_rate: Decay factor when decay occurs
+            exploration_decay_interval: Decay every N episodes
         """
         super().__init__(data_processor, reward_calculator, exploration_rate, random_seed,
-                         learning_rate, discount_factor, initial_q_value)
+                         learning_rate, discount_factor, initial_q_value,
+                         exploration_decay, exploration_min_rate, exploration_decay_rate, exploration_decay_interval)
         
         # Set random seed for reproducibility
         random.seed(random_seed)

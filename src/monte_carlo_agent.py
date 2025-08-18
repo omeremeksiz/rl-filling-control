@@ -8,7 +8,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 from config import (
     DEFAULT_LEARNING_RATE, DEFAULT_EXPLORATION_RATE, DEFAULT_RANDOM_SEED, 
-    DEFAULT_DISCOUNT_FACTOR, DEFAULT_MC_INITIAL_Q_VALUE,
+    DEFAULT_DISCOUNT_FACTOR, DEFAULT_INITIAL_Q_VALUE,
     DEFAULT_EXPLORATION_DECAY, DEFAULT_EXPLORATION_MIN_RATE,
     DEFAULT_EXPLORATION_DECAY_RATE, DEFAULT_EXPLORATION_DECAY_INTERVAL
 )
@@ -26,7 +26,7 @@ class MonteCarloAgent(BaseRLAgent):
                  learning_rate: float = DEFAULT_LEARNING_RATE,
                  exploration_rate: float = DEFAULT_EXPLORATION_RATE,
                  discount_factor: float = DEFAULT_DISCOUNT_FACTOR,
-                 initial_q_value: float = DEFAULT_MC_INITIAL_Q_VALUE,
+                 initial_q_value: float = DEFAULT_INITIAL_Q_VALUE,
                  random_seed: int = DEFAULT_RANDOM_SEED,
                  exploration_decay: bool = DEFAULT_EXPLORATION_DECAY,
                  exploration_min_rate: float = DEFAULT_EXPLORATION_MIN_RATE,

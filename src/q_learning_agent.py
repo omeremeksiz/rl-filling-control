@@ -147,6 +147,15 @@ class QLearningAgent(BaseRLAgent):
             }
             self.training_history.append(episode_stats)
             
+            # Show progress to console (same format as log) - every 100 episodes + first episode
+            if (episode + 1) % 100 == 0 or episode == 0:
+                print(f"--- Episode {episode + 1}/{num_episodes} ---")
+                print(f"Experienced Switching Point: {current_switch_point}")
+                print(f"Termination Type: {termination_type}")
+                print(f"Model-Selected Next Switching Point: {best_switch_point}")
+                print(f"Explored Switching Point: {explored_switch_point}")
+                print()
+            
             # Log episode if logger is provided
             if logger:
                 logger.log_episode(
