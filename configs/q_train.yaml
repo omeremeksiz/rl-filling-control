@@ -1,0 +1,22 @@
+algorithm: q
+mode: train
+seed: 42
+logging_level: INFO
+outputs_dir: outputs
+
+data:
+  path: data/data.xlsx
+  sheet_name: null
+
+training:
+  episodes: 300
+  max_steps_per_episode: 100
+
+hyperparameters:
+  alpha: 0.1
+  gamma: 0.99
+  epsilon_start: 0.2
+  epsilon_min: 0.01
+  epsilon_decay: 0.995
+
+

@@ -8,8 +8,8 @@ import time
 from typing import Optional, Dict, Any, List
 from tcp_client import TCPClient
 from modbus_client import ModbusClient
-from real_data_processor import RealDataProcessor
-from database_handler import DatabaseHandler
+from data_processor import DataProcessor
+from utils.database_utils import DatabaseHandler
 from reward_calculator import RewardCalculator
 from config import (
     DEFAULT_TCP_IP, DEFAULT_TCP_PORT, DEFAULT_MODBUS_IP, DEFAULT_MODBUS_PORT,
@@ -47,15 +47,17 @@ class RealWorldTester:
         # Communication clients
         self.tcp_client = TCPClient(tcp_ip, tcp_port)
         self.modbus_client = ModbusClient(modbus_ip, modbus_port, modbus_register)
+
+        self.quantization_step = quantization_step
         
         # Data processing (use common weight limits scaled for real device)
         real_tolerance_limits = [
             DEFAULT_SAFE_WEIGHT_MIN * quantization_step,
             DEFAULT_SAFE_WEIGHT_MAX * quantization_step
         ]
-        self.data_processor = RealDataProcessor(
-            real_tolerance_limits,
-            quantization_step
+        self.data_processor = DataProcessor(
+            quantization_step=quantization_step,
+            tolerance_limits=real_tolerance_limits
         )
         
         # Database handler
@@ -96,7 +98,7 @@ class RealWorldTester:
             logging.error("Failed to connect to devices")
             return False
     
-    def run_episode(self, switching_point: float) -> Optional[Dict[str, Any]]:
+    def run_episode(self, switch_point: float) -> Optional[Dict[str, Any]]:
         """
         Run a single filling episode with the given switching point.
         
@@ -106,10 +108,10 @@ class RealWorldTester:
         Returns:
             Episode data dictionary or None if failed
         """
-        logging.info(f"Starting episode with switching point: {switching_point}")
+        logging.info(f"Starting episode with switching point: {switch_point}")
         
         # Send switching point to device
-        if not self.modbus_client.send_switching_point(switching_point):
+        if not self.modbus_client.send_switch_point(switch_point):
             logging.error("Failed to send switching point")
             self.session_stats['failed_episodes'] += 1
             return None
@@ -123,41 +125,45 @@ class RealWorldTester:
         
         logging.info(f"Received raw data: {raw_data[:100]}...")  # Log first 100 chars
         
-        # Parse the data
-        parsed_data = self.data_processor.parse_raw_data(raw_data)
-        if not parsed_data:
-            logging.error("Failed to parse received data")
-            self.session_stats['failed_episodes'] += 1
-            return None
-        
-        # Create filling session for reward calculation
-        filling_session = self.data_processor.create_filling_session(parsed_data)
-        if not filling_session:
+        # Parse & build session from unified parser
+        session, meta, core_seq = self.data_processor.parse_real_episode(raw_data, session_id="real")
+        if not session or not meta:
             logging.error("Failed to create filling session")
             self.session_stats['failed_episodes'] += 1
             return None
-        
+
         # Calculate reward
         reward = self.reward_calculator.calculate_reward(
-            filling_session.episode_length,
-            filling_session.final_weight,
-            method="standard"  # Use standard reward calculation
+            session.episode_length,
+            session.final_weight,
+            method="standard"
         )
         
-        # Add reward to parsed data
-        parsed_data['reward'] = reward
-        parsed_data['filling_session'] = filling_session
+        # Build episode_data in the same shape as before for downstream code/DB
+        episode_data = {
+            'weight_sequence': core_seq,                  # pre-tail sequence (as before)
+            'final_weight': session.final_weight,
+            'switch_point': session.switch_point,
+            'coarse_time': meta.coarse_time,
+            'fine_time': meta.fine_time,
+            'total_time': meta.total_time,
+            'overflow_amount': meta.overflow_amount,
+            'underflow_amount': meta.underflow_amount,
+            'raw_data': meta.raw_data,
+            'reward': reward,
+            'filling_session': session
+        }
         
         # Update statistics
-        self._update_session_stats(parsed_data)
+        self._update_session_stats(episode_data)
         
         # Save to database if connected
-        self._save_episode_to_database(parsed_data)
+        self._save_episode_to_database(episode_data)
         
-        logging.info(f"Episode completed - Final weight: {parsed_data['final_weight']}, "
-                    f"Reward: {reward:.2f}")
+        logging.info(f"Episode completed - Final weight: {episode_data['final_weight']}, "
+                     f"Reward: {reward:.2f}")
         
-        return parsed_data
+        return episode_data
     
     def _update_session_stats(self, episode_data: Dict[str, Any]) -> None:
         """Update session statistics."""
@@ -180,7 +186,7 @@ class RealWorldTester:
                 episode_data['coarse_time'],
                 episode_data['fine_time'],
                 episode_data['total_time'],
-                episode_data['switching_point'],
+                episode_data['switch_point'],
                 episode_data['overflow_amount'],
                 episode_data['underflow_amount']
             )
@@ -193,7 +199,7 @@ class RealWorldTester:
                     episode_data['coarse_time'],
                     episode_data['fine_time'],
                     episode_data['total_time'],
-                    episode_data['switching_point'],
+                    episode_data['switch_point'],
                     episode_data['overflow_amount'],
                     episode_data['underflow_amount']
                 )
@@ -295,7 +301,7 @@ class RealWorldTester:
         self._print_session_summary()
         return episodes
     
-    def run_manual_testing(self, switching_points: List[float]) -> List[Dict[str, Any]]:
+    def run_manual_testing(self, switch_points: List[float]) -> List[Dict[str, Any]]:
         """
         Run episodes with manually specified switching points.
         
@@ -312,11 +318,11 @@ class RealWorldTester:
         episodes = []
         
         try:
-            for i, switching_point in enumerate(switching_points):
-                logging.info(f"Running episode {i + 1}/{len(switching_points)} "
-                           f"with switching point: {switching_point}")
+            for i, switch_point in enumerate(switch_points):
+                logging.info(f"Running episode {i + 1}/{len(switch_points)} "
+                           f"with switching point: {switch_point}")
                 
-                episode_data = self.run_episode(switching_point)
+                episode_data = self.run_episode(switch_point)
                 if episode_data:
                     episodes.append(episode_data)
                 else:
@@ -354,7 +360,7 @@ class RealWorldTester:
         
         logging.info("="*50)
     
-    def _update_agent_with_episode(self, agent, filling_session, switching_point):
+    def _update_agent_with_episode(self, agent, filling_session, switch_point):
         """
         Update the RL agent with real-world episode data (step 6 of the testing loop).
         
@@ -372,12 +378,12 @@ class RealWorldTester:
                 episode_length = filling_session.episode_length
                 final_weight = filling_session.final_weight
                 reward = self.reward_calculator.calculate_reward(episode_length, final_weight, method="mab")
-                agent._update_q_value(switching_point, reward)
-                logging.info(f"MAB agent updated: Q({switching_point}) with reward {reward:.2f}")
+                agent._update_q_value(switch_point, reward)
+                logging.info(f"MAB agent updated: Q({switch_point}) with reward {reward:.2f}")
                 
             elif agent_type in ["MonteCarloAgent", "TDAgent", "StandardQLearningAgent"]:
                 # MC/TD/Q-Learning: Episode-based learning using FillingSession
-                episode_length, final_weight = agent.train_episode(switching_point)
+                episode_length, final_weight = agent.train_episode(switch_point)
                 logging.info(f"{agent_type} updated with episode: length={episode_length}, weight={final_weight}")
                 
             else:

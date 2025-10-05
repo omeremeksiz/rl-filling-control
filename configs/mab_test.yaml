@@ -1,0 +1,40 @@
+algorithm: mab
+mode: test
+seed: 42
+logging_level: INFO
+outputs_dir: outputs
+
+data:
+  path: data/data.xlsx
+
+testing:
+  episodes: 1
+
+hyperparameters:
+  alpha: 0.1
+  epsilon_start: 0.2
+  epsilon_min: 0.01
+  epsilon_decay: 0.99
+  underflow_penalty_constant: 0.0
+  overflow_penalty_constant: 0.0
+  safe_min: 74
+  safe_max: 76
+  starting_switch_point: 45
+
+database:
+  enabled: True
+  name: "filling_data"
+  user: "root"
+  password: "6637"
+  host: "127.0.0.1"
+  port: 3306
+
+communication:
+  tcp:
+    host: 127.0.0.1
+    port: 5051
+    timeout: 2.0
+  modbus:
+    host: 127.0.0.1
+    port: 1502
+    register: 40010

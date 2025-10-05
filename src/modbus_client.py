@@ -54,7 +54,7 @@ class ModbusClient:
             logging.error(f"Error connecting to Modbus device: {e}")
             return False
     
-    def send_switching_point(self, switching_point: float) -> bool:
+    def send_switch_point(self, switch_point: float) -> bool:
         """
         Send switching point to device via Modbus.
         
@@ -70,7 +70,7 @@ class ModbusClient:
             
         try:
             # Scale the switching point for device (multiply by 1000)
-            scaled_weight = int(switching_point * 1000)
+            scaled_weight = int(switch_point * 1000)
             
             # Adjust register address (Modbus addressing convention)
             zero_based_register = self.register - 40001
@@ -79,11 +79,11 @@ class ModbusClient:
             result = self.client.write_register(zero_based_register, scaled_weight)
             
             if result.isError():
-                logging.error(f"Error writing switching point {switching_point} "
+                logging.error(f"Error writing switching point {switch_point} "
                             f"(scaled {scaled_weight}) to register {self.register}")
                 return False
             else:
-                logging.info(f"Switching point {switching_point} "
+                logging.info(f"Switching point {switch_point} "
                            f"(scaled {scaled_weight}) sent to register {self.register}")
                 return True
                 

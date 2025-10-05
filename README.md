@@ -66,7 +66,8 @@ src/                    # Core source code directory
 ├── Real-World Testing
 │   ├── tcp_client.py              # TCP communication with device
 │   ├── modbus_client.py           # Modbus communication for switching points
-│   ├── database_handler.py        # Database operations for episodes
+│   ├── utils/
+│   │   ├── database_utils.py      # Database operations for episodes
 │   └── real_world_tester.py       # Real-world testing orchestrator
 └── Utilities
     ├── logger.py                  # Training progress logging
@@ -104,7 +105,7 @@ requirements.txt # Python dependencies
 #### Real-World Testing
 - **`tcp_client.py`**: TCP communication client for receiving filling data from physical device
 - **`modbus_client.py`**: Modbus communication client for sending switching points to device
-- **`database_handler.py`**: Database operations for storing real-world episodes and statistics
+- **`utils/database_utils.py`**: Database operations for storing real-world episodes and statistics
 - **`real_world_tester.py`**: Orchestrates real-world testing sessions with device communication
 
 #### Utilities

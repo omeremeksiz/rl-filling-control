@@ -1,0 +1,33 @@
+algorithm: td
+mode: test
+seed: 42
+logging_level: INFO
+outputs_dir: outputs
+
+data:
+  path: data/data.xlsx
+  sheet_name: null
+
+testing:
+  episodes: 50
+  max_steps_per_episode: 100
+
+hyperparameters:
+  alpha: 0.1
+  gamma: 0.99
+  safe_min: 80
+  safe_max: 120
+
+database:
+  enabled: false
+
+communication:
+  tcp:
+    host: 127.0.0.1
+    port: 5051
+    timeout: 2.0
+  modbus:
+    host: 127.0.0.1
+    port: 502
+    register: 40010
+

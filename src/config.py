@@ -7,7 +7,7 @@ Contains all default parameters for training, testing, and real-world operation.
 DATA_FILE_PATH = "data/data.xlsx"
 
 # Operation mode
-DEFAULT_OPERATION_MODE = "train"  # "train" for simulation or "test" for real device
+DEFAULT_OPERATION_MODE = "test"  # "train" for simulation or "test" for real device
 
 # Training parameters
 DEFAULT_TRAINING_EPISODES = 1000

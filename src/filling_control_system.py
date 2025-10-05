@@ -96,7 +96,7 @@ class FillingControlSystem:
             if self.operation_mode.lower() == "train":
                 # Training mode: use simulation data
                 self.data_processor = DataProcessor(self.data_file_path)
-                self.data_processor.load_data()
+                self.data_processor.load_excel(self.data_file_path)
                 
                 # Initialize RL agent using factory
                 self.agent = AgentFactory.create_agent(
@@ -119,8 +119,7 @@ class FillingControlSystem:
             elif self.operation_mode.lower() == "test":
                 # Real-world testing mode: initialize RL agent + real-world tester
                 # Create a minimal data processor for agent initialization (needed for Q-table structure)
-                self.data_processor = DataProcessor(self.data_file_path)
-                self.data_processor.load_data()
+                self.data_processor = DataProcessor()
                 
                 # Initialize RL agent using factory (same as training)
                 self.agent = AgentFactory.create_agent(

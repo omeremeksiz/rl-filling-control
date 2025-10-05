@@ -1,10 +1,5 @@
 """
-Unified data processing for container filling control system.
-- Domain model: FillingSession (derives switch_point, final_weight, episode_length)
-- Parsers:
-    * from Excel (historical training data)
-    * from TCP/raw device dump (real-world episodes)
-- Training helpers: clustering by switch point, stats
+Port of src/data_processor.py to utils namespace (no external src imports).
 """
 
 from __future__ import annotations
@@ -14,22 +9,10 @@ import pandas as pd
 import numpy as np
 import logging
 
-# Special tokens (single source of truth)
 SWITCH_TOKEN = -1
 TERMINATION_TOKEN = 300
 
-
 class FillingSession:
-    """Represents a single container filling session with extracted metadata.
-
-    Expects weight_sequence shaped like:
-        [..., SWITCH_TOKEN, ..., <final_weight>, TERMINATION_TOKEN]
-    Where:
-        - switch_point := value immediately BEFORE SWITCH_TOKEN
-        - final_weight := value immediately BEFORE TERMINATION_TOKEN
-        - episode_length := index of TERMINATION_TOKEN
-    """
-
     def __init__(self, session_id: str, weight_sequence: List[int]):
         self.session_id = session_id
         self.weight_sequence = weight_sequence
@@ -63,46 +46,26 @@ class FillingSession:
 
 @dataclass
 class EpisodeMeta:
-    """Metadata we may want to log/store for each episode."""
     raw_data: Optional[str] = None
     coarse_time: Optional[int] = None
     fine_time: Optional[int] = None
     total_time: Optional[int] = None
     overflow_amount: int = 0
     underflow_amount: int = 0
-    switch_point: Optional[int] = None  # copied back from session
-    final_weight: Optional[int] = None  # copied back from session
-    episode_length: Optional[int] = None  # copied back from session
+    switch_point: Optional[int] = None
+    final_weight: Optional[int] = None
+    episode_length: Optional[int] = None
 
 
 class DataProcessor:
-    """
-    Unified processor:
-    - For offline Excel: load_excel(...) → self.sessions & clustering helpers
-    - For real TCP: parse_real_episode(...) → (FillingSession, EpisodeMeta, core_weight_sequence)
-    """
-
-    def __init__(self,
-                 quantization_step: int = 10000,
-                 tolerance_limits: Optional[List[int]] = None):
-        """
-        Args:
-            quantization_step: device grams → model units (preserve tokens)
-            tolerance_limits: [min_weight, max_weight] in grams (device space)
-        """
+    def __init__(self, quantization_step: int = 10000, tolerance_limits: Optional[List[int]] = None):
         self.quantization_step = quantization_step
         self.tolerance_limits = tolerance_limits or [0, 0]
-
-        # Training collections (for Excel data)
         self.sessions: List[FillingSession] = []
         self.switch_point_clusters: Dict[int, List[FillingSession]] = {}
         self.used_sessions: Dict[int, List[FillingSession]] = {}
 
-    # -------------------------------------------------------------------------
-    # Excel/offline path
-    # -------------------------------------------------------------------------
     def load_excel(self, file_path: str) -> None:
-        """Load and process the Excel data file into sessions + clusters."""
         try:
             df = pd.read_excel(file_path)
             self._process_sessions_from_df(df)
@@ -111,7 +74,6 @@ class DataProcessor:
             raise RuntimeError(f"Failed to load data from {file_path}: {e}")
 
     def _process_sessions_from_df(self, df: pd.DataFrame) -> None:
-        """Each column is a session. Assumes tokens already exist in the column."""
         self.sessions = []
         for column in df.columns:
             seq = df[column].dropna().astype(int).tolist()
@@ -138,9 +100,6 @@ class DataProcessor:
                     all_w.add(w)
         return sorted(all_w)
 
-    def get_sessions_for_switch_point(self, switch_point: int) -> List[FillingSession]:
-        return self.switch_point_clusters.get(switch_point, [])
-
     def get_unused_sessions_for_switch_point(self, switch_point: int) -> List[FillingSession]:
         all_s = self.switch_point_clusters.get(switch_point, [])
         used_s = self.used_sessions.get(switch_point, [])
@@ -157,34 +116,9 @@ class DataProcessor:
         if switch_point in self.used_sessions:
             self.used_sessions[switch_point] = []
 
-    def get_session_statistics(self) -> Dict[str, Any]:
-        if not self.sessions:
-            return {}
-        switch_points = [s.switch_point for s in self.sessions if s.switch_point is not None]
-        final_weights = [s.final_weight for s in self.sessions if s.final_weight is not None]
-        episode_lengths = [s.episode_length for s in self.sessions]
-        return {
-            'total_sessions': len(self.sessions),
-            'unique_switch_points': len(set(switch_points)) if switch_points else 0,
-            'switch_point_range': (min(switch_points), max(switch_points)) if switch_points else None,
-            'final_weight_range': (min(final_weights), max(final_weights)) if final_weights else None,
-            'avg_episode_length': float(np.mean(episode_lengths)) if episode_lengths else 0.0,
-        }
-
-    # -------------------------------------------------------------------------
-    # Real/TCP path
-    # -------------------------------------------------------------------------
+    # Real/TCP parsing helpers
     def parse_real_episode(self, raw_data: str, session_id: str = "real"
                            ) -> Tuple[Optional[FillingSession], Optional[EpisodeMeta], Optional[List[int]]]:
-        """
-        Parse a raw TCP dump into a FillingSession + metadata.
-
-        Returns:
-            (session, meta, core_sequence)
-            - session: Filled and validated FillingSession
-            - meta: EpisodeMeta for DB/logging
-            - core_sequence: sequence without the final tail (useful if you store it separately)
-        """
         if not raw_data:
             return None, None, None
         try:
@@ -197,14 +131,13 @@ class DataProcessor:
             if not timing:
                 return None, None, None
 
-            core_sequence = self._parse_weight_sequence(pairs)  # quantized & trimmed; includes SWITCH_TOKEN
+            core_sequence = self._parse_weight_sequence(pairs)
             if not core_sequence:
                 return None, None, None
 
             final_weight = self._get_final_weight(pairs)
             overflow, underflow = self._calculate_overflow_underflow(final_weight)
 
-            # Build full sequence: [..., SWITCH_TOKEN, ..., final_weight, TERMINATION_TOKEN]
             full_seq = core_sequence.copy()
             if final_weight is not None:
                 full_seq.append(final_weight)
@@ -226,31 +159,18 @@ class DataProcessor:
                 episode_length=session.episode_length,
             )
             return session, meta, core_sequence
-
         except Exception as e:
             logging.error(f"Error parsing real episode: {e}")
             return None, None, None
-        
-    def get_episode_stats(self, episode_data: Dict[str, Any]) -> Dict[str, int]:
-        """Compute basic counters for one episode (DB-friendly)."""
-        overflow = int(episode_data.get('overflow_amount', 0) or 0)
-        underflow = int(episode_data.get('underflow_amount', 0) or 0)
-        return {
-            'valid_fillings': 1,
-            'overflow_fillings': 1 if overflow > 0 else 0,
-            'underflow_fillings': 1 if underflow > 0 else 0,
-            'safe_fillings': 1 if (overflow == 0 and underflow == 0) else 0,
-        }
 
-    # ----------------- helpers for real/TCP parsing -----------------
     def _extract_timing_info(self, data_pairs: List[str]) -> Optional[Dict[str, int]]:
         try:
             if "300,300" not in data_pairs or "-1,-1" not in data_pairs:
                 return None
             last_pair = data_pairs[-1]
             fine_time, total_time = map(int, last_pair.split(','))
-            fine_time *= 100   # ms
-            total_time *= 10   # ms
+            fine_time *= 100
+            total_time *= 10
             coarse_time = total_time - fine_time
             return {
                 'coarse_time': coarse_time,
@@ -269,13 +189,12 @@ class DataProcessor:
                 if w is not None:
                     weights.append(w)
             q = self._quantize_weights(weights)
-            core = self._remove_elements(q)  # remove first 50 and drop last weight (we’ll append tail later)
+            core = self._remove_elements(q)
             return core
         except Exception:
             return None
 
     def _rearrange_pairs(self, data_pairs: List[str]) -> None:
-        """Ensure the pair AFTER '300,300' is considered the final weight by moving it before the marker."""
         for i in range(len(data_pairs)):
             if '300,300' in data_pairs[i]:
                 if i + 1 < len(data_pairs):
@@ -300,7 +219,6 @@ class DataProcessor:
         return out
 
     def _remove_elements(self, weights: List[int]) -> List[int]:
-        """Match your model’s preprocessing: drop first 50 and drop the last weight (we re-append final later)."""
         if len(weights) > 51:
             weights = weights[50:]
         if weights:
@@ -323,3 +241,5 @@ class DataProcessor:
         overflow = max(0, final_weight - hi)
         underflow = max(0, lo - final_weight)
         return overflow, underflow
+
+
