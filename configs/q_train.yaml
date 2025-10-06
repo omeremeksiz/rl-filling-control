@@ -6,17 +6,21 @@ outputs_dir: outputs
 
 data:
   path: data/data.xlsx
-  sheet_name: null
 
 training:
-  episodes: 300
-  max_steps_per_episode: 100
+  episodes: 500
 
 hyperparameters:
-  alpha: 0.1
   gamma: 0.99
-  epsilon_start: 0.2
-  epsilon_min: 0.01
-  epsilon_decay: 0.995
+  alpha: 0.1
+  initial_q: -125.0
+  epsilon_start: 0.5
+  epsilon_min: 0.1
+  epsilon_decay: 1.00
+  underflow_penalty_constant: 0.0
+  overflow_penalty_constant: 0.0
+  safe_min: 74
+  safe_max: 76
+  starting_switch_point: 45
 
 

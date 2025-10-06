@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import random
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import numpy as np
 import yaml
@@ -14,7 +15,7 @@ from utils.plotting_utils import (
     plot_switching_trajectory_with_exploration,
 )
 from utils.database_utils import DatabaseHandler
-from utils.data_processing import DataProcessor, EpisodeMeta
+from utils.data_processing import DataProcessor, EpisodeMeta, SWITCH_TOKEN, TERMINATION_TOKEN
 
 
 def init_database_handler(cfg: Dict[str, Any], logger) -> Optional[DatabaseHandler]:
@@ -38,17 +39,9 @@ def init_database_handler(cfg: Dict[str, Any], logger) -> Optional[DatabaseHandl
         return None
 
     if not handler.connect():
-        logger.warning(
-            "Database connection unavailable; continuing without persistence. "
-            "(Check mysql-connector-python installation and DB credentials.)"
-        )
+        logger.warning("Database connection unavailable; continuing without persistence.")
         return None
-
-    safe_host = handler.config.get("host", "?")
-    safe_db = handler.config.get("name", "?")
-    logger.info(f"Database logging enabled -> host={safe_host}, database={safe_db}")
     return handler
-
 
 def persist_episode(
     handler: Optional[DatabaseHandler],
@@ -135,8 +128,8 @@ def load_config() -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def calc_reward_td(final_weight: int, safe_min: int = 80, safe_max: int = 120,
-                   overflow_penalty_constant: float = -10.0, underflow_penalty_constant: float = -10.0) -> float:
+def calc_reward_td(final_weight: int, safe_min: int, safe_max: int,
+                   overflow_penalty_constant: float, underflow_penalty_constant: float) -> float:
     base_reward = 0.0
     if safe_min <= final_weight <= safe_max:
         penalty = 0.0
@@ -145,6 +138,41 @@ def calc_reward_td(final_weight: int, safe_min: int = 80, safe_max: int = 120,
     else:
         penalty = (safe_min - final_weight) * underflow_penalty_constant
     return base_reward + penalty
+
+
+def ensure_q_entries(q_table: Dict[Tuple[int, int], float], state: int, initial_q: float) -> None:
+    if (state, 1) not in q_table:
+        q_table[(state, 1)] = initial_q
+    if (state, -1) not in q_table:
+        q_table[(state, -1)] = initial_q
+
+
+def build_td_trajectory(
+    weight_sequence: List[int],
+    current_switch_point: int,
+    final_weight: int,
+    safe_min: int,
+    safe_max: int,
+    overflow_penalty_constant: float,
+    underflow_penalty_constant: float,
+) -> List[Tuple[int, int, float]]:
+    trajectory: List[Tuple[int, int, float]] = []
+    for w in weight_sequence:
+        if w in (SWITCH_TOKEN, TERMINATION_TOKEN):
+            continue
+        action = 1 if w < current_switch_point else -1
+        trajectory.append((w, action, 0.0))
+    if trajectory:
+        w_last, a_last, r_last = trajectory[-1]
+        r_last += calc_reward_td(
+            final_weight,
+            safe_min,
+            safe_max,
+            overflow_penalty_constant,
+            underflow_penalty_constant,
+        )
+        trajectory[-1] = (w_last, a_last, r_last)
+    return trajectory
 
 
 def main() -> None:
@@ -161,60 +189,66 @@ def main() -> None:
     max_steps = int(test_cfg.get("max_steps_per_episode", 100))
 
     hp = cfg.get("hyperparameters", {})
-    alpha = float(hp.get("alpha", 0.1))
-    gamma = float(hp.get("gamma", 0.99))
-    safe_min = int(hp.get("safe_min", 80))
-    safe_max = int(hp.get("safe_max", 120))
+    gamma = float(hp.get("gamma"))
+    alpha = float(hp.get("alpha"))
+    initial_q = float(hp.get("initial_q"))
+    epsilon = float(hp.get("epsilon_start"))
+    epsilon_min = float(hp.get("epsilon_min"))
+    epsilon_decay = float(hp.get("epsilon_decay"))
+    underflow_penalty_constant = float(hp.get("underflow_penalty_constant"))
+    overflow_penalty_constant = float(hp.get("overflow_penalty_constant"))
+    safe_min = int(hp.get("safe_min"))
+    safe_max = int(hp.get("safe_max"))
+    starting_switch_point = int(hp.get("starting_switch_point"))
 
     comm_cfg = cfg.get("communication", {})
     tcp_cfg = comm_cfg.get("tcp", {})
     modbus_cfg = comm_cfg.get("modbus", {})
 
-    tcp = create_tcp_client(tcp_cfg.get("host", "127.0.0.1"), int(tcp_cfg.get("port", 5051)), timeout=float(tcp_cfg.get("timeout", 2.0)))
-    modbus = create_modbus_client(modbus_cfg.get("host", "127.0.0.1"), int(modbus_cfg.get("port", 502)), register=int(modbus_cfg.get("register", 40010)))
-    tcp.connect()
-    modbus.connect()
+    tcp = create_tcp_client(
+        tcp_cfg.get("host", "127.0.0.1"),
+        int(tcp_cfg.get("port", 5051)),
+        timeout=float(tcp_cfg.get("timeout", 2.0)),
+    )
+    modbus = create_modbus_client(
+        modbus_cfg.get("host", "127.0.0.1"),
+        int(modbus_cfg.get("port", 1502)),
+        register=int(modbus_cfg.get("register", 40010)),
+    )
 
-    # Online TD (SARSA) using live reward surrogate (final weight surrogate per step)
-    value_map: Dict[Tuple[int, int], float] = {}
-    current_switch_point = int(test_cfg.get("initial_switch_point", 500))
-    observed_states: Set[int] = set()
-    episode_indices: List[int] = []
-    model_selected_list: List[int] = []
-    explored_list: List[Optional[int]] = []
+    if not tcp.connect() or not modbus.connect():
+        logger.error("Failed to connect to one of the communication endpoints; aborting test run.")
+        return
 
     db_handler = init_database_handler(cfg, logger)
     data_processor = DataProcessor()
 
+    q_table: Dict[Tuple[int, int], float] = {}
+    positive_updates: Set[int] = set()
+    known_switch_points: List[int] = [starting_switch_point]
+
+    current_switch_point = starting_switch_point
+    traj_ep: List[int] = []
+    model_selected_list: List[int] = []
+    explored_list: List[Optional[int]] = []
+
     try:
         for ep in range(episodes):
+            logger.info(f"--- Episode {ep + 1}/{episodes} ---")
+            logger.info(f"Dispatching switching point: {current_switch_point}")
+
+            modbus.send_switch_point(float(current_switch_point))
+
             raw_payloads: List[str] = []
             weight_trace: List[int] = []
-            final_weight = current_switch_point
 
             for _ in range(max_steps):
                 payload = tcp.receive_data()
                 if payload:
                     raw_payloads.append(payload)
-                xs = parse_live_payload_to_floats(payload) if payload else []
-                if xs:
-                    weight_trace.extend(int(round(x)) for x in xs)
-                final_weight_surrogate = int(max(0.0, float(np.mean(xs)) if xs else 0.0))
-                final_weight = final_weight_surrogate
-                observed_states.add(final_weight_surrogate)
-
-                r = calc_reward_td(final_weight_surrogate, safe_min=safe_min, safe_max=safe_max)
-                s_t = final_weight_surrogate
-                a_t = 1 if s_t < current_switch_point else -1
-                q_sa = value_map.get((s_t, a_t), 0.0)
-
-                s_tp1 = s_t
-                a_tp1 = 1 if s_tp1 < current_switch_point else -1
-                q_next = value_map.get((s_tp1, a_tp1), 0.0)
-                td_target = r + gamma * q_next
-                value_map[(s_t, a_t)] = q_sa + alpha * (td_target - q_sa)
-
-                modbus.send_switch_point(float(max(0.0, current_switch_point)))
+                values = parse_live_payload_to_floats(payload) if payload else []
+                if values:
+                    weight_trace.extend(int(round(v)) for v in values)
 
             raw_combined = "".join(raw_payloads)
             session = None
@@ -226,76 +260,123 @@ def main() -> None:
                     session_id=f"test_ep_{ep + 1}",
                 )
 
-            if meta and session:
-                final_candidate = meta.final_weight if meta.final_weight is not None else session.final_weight
-                if final_candidate is not None:
-                    final_weight = final_candidate
-
-                length_candidate = (
-                    meta.episode_length if meta.episode_length is not None else session.episode_length
-                )
-                episode_length_db = length_candidate if length_candidate is not None else len(core_sequence or weight_trace)
-                switch_for_storage = (
-                    session.switch_point if session.switch_point is not None else current_switch_point
-                )
+            if session and meta and core_sequence:
+                weight_sequence = [w for w in session.weight_sequence[:-1] if w not in (SWITCH_TOKEN, TERMINATION_TOKEN)]
+                final_weight = meta.final_weight if meta.final_weight is not None else (session.final_weight or 0)
             else:
-                episode_length_db = len(weight_trace)
-                switch_for_storage = current_switch_point
-                if core_sequence is None:
-                    core_sequence = weight_trace.copy()
+                weight_sequence = weight_trace.copy()
+                final_weight = int(np.mean(weight_trace)) if weight_trace else 0
+                meta = meta if meta else None
 
-            store_sequence = core_sequence if core_sequence else (weight_trace if weight_trace else [final_weight])
-            if episode_length_db <= 0:
-                episode_length_db = len(store_sequence)
+            for state in weight_sequence:
+                ensure_q_entries(q_table, state, initial_q)
+                if state not in known_switch_points:
+                    known_switch_points.append(state)
+            known_switch_points = sorted(set(known_switch_points))
+
+            trajectory = build_td_trajectory(
+                weight_sequence,
+                current_switch_point,
+                final_weight,
+                safe_min,
+                safe_max,
+                overflow_penalty_constant,
+                underflow_penalty_constant,
+            )
+
+            for idx in range(len(trajectory)):
+                state, action, reward = trajectory[idx]
+                ensure_q_entries(q_table, state, initial_q)
+                if action == -1 and state not in positive_updates:
+                    continue
+                if idx + 1 < len(trajectory):
+                    next_state, next_action, _ = trajectory[idx + 1]
+                    ensure_q_entries(q_table, next_state, initial_q)
+                    td_target = reward + gamma * q_table[(next_state, next_action)]
+                else:
+                    td_target = reward
+                q_sa = q_table[(state, action)]
+                q_table[(state, action)] = q_sa + alpha * (td_target - q_sa)
+                if action == 1:
+                    positive_updates.add(state)
 
             state_to_best: Dict[int, Tuple[int, float]] = {}
-            for (state, action), value in value_map.items():
+            for (state, action), value in q_table.items():
                 best = state_to_best.get(state)
                 if best is None or value > best[1]:
                     state_to_best[state] = (action, value)
 
             best_switch_point = current_switch_point
-            for state in sorted(observed_states):
-                best = state_to_best.get(state)
-                if best is not None and best[0] == -1:
+            for state in sorted(state_to_best.keys()):
+                if state_to_best[state][0] == -1:
                     best_switch_point = state
                     break
 
-            episode_indices.append(ep + 1)
-            model_selected_list.append(best_switch_point)
-            explored_list.append(None)
+            explored_choice: Optional[int] = None
+            if random.random() < epsilon and len(known_switch_points) > 1:
+                if current_switch_point in known_switch_points:
+                    idx = known_switch_points.index(current_switch_point)
+                    target = min(idx + 1, len(known_switch_points) - 1)
+                    explored_choice = known_switch_points[target]
+                    next_switch_point = explored_choice
+                else:
+                    next_switch_point = best_switch_point
+            else:
+                next_switch_point = best_switch_point
 
-            logger.info(f"Test Episode {ep + 1}/{episodes} done | switch_point={best_switch_point}")
+            epsilon = max(epsilon_min, epsilon * epsilon_decay)
+
+            termination_label = (
+                "safe" if safe_min <= final_weight <= safe_max
+                else ("underweight" if final_weight < safe_min else "overweight")
+            )
+            logger.info(f"Termination Type: {termination_label}")
+            logger.info(f"Model-Selected Next Switching Point: {best_switch_point}")
+            logger.info(f"Explored Switching Point: {explored_choice}")
+            logger.info("")
+
+            traj_ep.append(ep + 1)
+            model_selected_list.append(best_switch_point)
+            explored_list.append(explored_choice)
 
             persist_episode(
                 db_handler,
                 logger,
                 raw_data=meta.raw_data if meta and meta.raw_data else raw_combined,
-                weight_sequence=store_sequence,
-                switch_point=int(switch_for_storage),
-                episode_length=episode_length_db,
+                weight_sequence=weight_sequence or (weight_trace if weight_trace else [final_weight]),
+                switch_point=int(current_switch_point),
+                episode_length=meta.episode_length if meta and meta.episode_length is not None else max(1, len(weight_sequence)),
                 final_weight=int(final_weight),
                 safe_min=safe_min,
                 safe_max=safe_max,
-                q_values_snapshot=value_map.copy(),
+                q_values_snapshot=q_table.copy(),
                 meta=meta,
             )
 
-            current_switch_point = best_switch_point
+            current_switch_point = next_switch_point
+
     finally:
         tcp.close()
         modbus.close()
         if db_handler:
             db_handler.close()
 
-    if value_map:
-        plot_qvalue_vs_state_from_pair_table(value_map, paths['qvalue_vs_state_path'])
+    if q_table:
+        plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
     plot_switching_trajectory_with_exploration(
-        episode_indices,
+        traj_ep,
         model_selected_list,
         explored_list,
         paths['switching_point_trajectory_path'],
     )
+
+    metrics = {
+        "episodes": episodes,
+        "best_switch_point": model_selected_list[-1] if model_selected_list else None,
+    }
+    with open(os.path.join(output_dir, "metrics.json"), "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+    logger.info("Finished testing. Metrics: %s", metrics)
 
 
 if __name__ == "__main__":

@@ -17,8 +17,8 @@ hyperparameters:
   epsilon_start: 0.5
   epsilon_min: 0.01
   epsilon_decay: 1.0
-  underflow_penalty_constant: 0.0
-  overflow_penalty_constant: 0.0
+  underflow_penalty_constant: -100.0
+  overflow_penalty_constant: -100.0
   safe_min: 74
   safe_max: 76
   starting_switch_point: 45

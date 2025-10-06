@@ -19,7 +19,7 @@ def load_config() -> Dict[str, Any]:
     with open(os.path.join("configs", "mc_train.yaml"), "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
     
-def calc_reward_mab(final_weight: int, safe_min: int, safe_max: int,
+def calc_reward_mc(final_weight: int, safe_min: int, safe_max: int,
                         overflow_penalty_constant: float, underflow_penalty_constant: float) -> float:
         base_reward = 0.0
         if safe_min <= final_weight <= safe_max:
@@ -45,7 +45,7 @@ def main() -> None:
     dp.load_excel(excel_path)
 
     train_cfg = cfg.get("training", {})
-    episodes = int(train_cfg.get("episodes", 200))
+    episodes = int(train_cfg.get("episodes"))
 
     hp = cfg.get("hyperparameters", {})
     gamma = float(hp.get("gamma"))
@@ -58,7 +58,7 @@ def main() -> None:
     overflow_penalty_constant = float(hp.get("overflow_penalty_constant"))
     safe_min = int(hp.get("safe_min"))
     safe_max = int(hp.get("safe_max"))  
-    starting_switch_point = int(hp.get("starting_switch_point"))
+    starting_sp = int(hp.get("starting_switch_point"))
 
     # Monte Carlo over filling-process states with actions {1,-1}
     available_weights = dp.get_all_available_weights()
@@ -70,8 +70,8 @@ def main() -> None:
         q_table[(w, -1)] = initial_q
 
     # Choose an initial switch point from data clusters
-    switch_points = dp.get_available_switch_points()
-    current_switch_point = starting_switch_point
+    available_sps = dp.get_available_switch_points()
+    current_sp = starting_sp
     traj_ep: List[int] = []
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
@@ -79,9 +79,9 @@ def main() -> None:
 
     for ep in range(episodes):
         # Build trajectory: fast (1) before switch, slow (-1) after
-        unused = dp.get_unused_sessions_for_switch_point(current_switch_point)
+        unused = dp.get_unused_sessions_for_switch_point(current_sp)
         s = random.choice(unused)
-        dp.mark_session_as_used(current_switch_point, s)
+        dp.mark_session_as_used(current_sp, s)
 
         # Construct episodic (state, action, step_reward)
         trajectory: List[Tuple[int,int,float]] = []
@@ -91,28 +91,28 @@ def main() -> None:
         for w in s.weight_sequence[:-1]:
             if w in (-1, 300):
                 continue
-            a = 1 if w < current_switch_point else -1
+            a = 1 if w < current_sp else -1
             trajectory.append((w, a, step_cost))
 
         # Append terminal reward from final weight
-        final_weight = s.final_weight if s.final_weight is not None else 0
-        final_reward = calc_reward_mab(final_weight, safe_min, safe_max,
+        final_weight = s.final_weight
+        final_reward = calc_reward_mc(final_weight, safe_min, safe_max,
                                  overflow_penalty_constant, underflow_penalty_constant)
         if trajectory:
-            w_last, a_last, r_last = trajectory[-1]
-            trajectory[-1] = (w_last, a_last, r_last + final_reward)
+            s_last, a_last, r_last = trajectory[-1]
+            trajectory[-1] = (s_last, a_last, r_last + final_reward)
 
         # Compute returns and update MC
         G = 0.0
         for t in reversed(range(len(trajectory))):
-            w_t, a_t, r_t = trajectory[t]
+            s_t, a_t, r_t = trajectory[t]
             G = r_t + gamma * G
-            if a_t == -1 and w_t not in positive_updates:
+            if a_t == -1 and s_t not in positive_updates:
                 continue
-            q_sa = q_table[(w_t, a_t)]
-            q_table[(w_t, a_t)] = q_sa + alpha * (G - q_sa)
+            q_sa = q_table[(s_t, a_t)]
+            q_table[(s_t, a_t)] = q_sa + alpha * (G - q_sa)
             if a_t == 1:
-                positive_updates.add(w_t)
+                positive_updates.add(s_t)
 
         # Policy: flip point is first state whose best action becomes -1
         # Find best switch from policy derived from q_table
@@ -121,25 +121,25 @@ def main() -> None:
             best = state_to_best.get(w)
             if best is None or v > best[1]:
                 state_to_best[w] = (a, v)
-        best_sp = current_switch_point
+        best_sp = current_sp
         for w in sorted(state_to_best.keys()):
-            if state_to_best[w][0] == -1 and w in switch_points:
+            if state_to_best[w][0] == -1 and w in available_sps:
                 best_sp = w
                 break
 
         logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-        logger.info(f"Experienced Switching Point: {current_switch_point}")
+        logger.info(f"Experienced Switching Point: {current_sp}")
         termination_type = "safe" if (safe_min <= final_weight <= safe_max) else ("underweight" if final_weight < safe_min else "overweight")
         logger.info(f"Termination Type: {termination_type}")
 
         explored_choice: Optional[int] = None
         if random.random() < epsilon:
-            idx = switch_points.index(current_switch_point)
-            target = min(idx + 1, len(switch_points) - 1)
-            next_switch_point = switch_points[target]
-            explored_choice = next_switch_point
+            idx = available_sps.index(current_sp)
+            target = min(idx + 1, len(available_sps) - 1)
+            next_sp = available_sps[target]
+            explored_choice = next_sp
         else:
-            next_switch_point = best_sp
+            next_sp = best_sp
 
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
@@ -150,7 +150,7 @@ def main() -> None:
         traj_ep.append(ep + 1)
         model_selected_list.append(best_sp)
         explored_list.append(explored_choice)
-        current_switch_point = next_switch_point
+        current_sp = next_sp
 
     plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
     plot_switching_trajectory_with_exploration(traj_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])

@@ -6,21 +6,30 @@ outputs_dir: outputs
 
 data:
   path: data/data.xlsx
-  sheet_name: null
 
 testing:
-  episodes: 50
-  max_steps_per_episode: 100
+  episodes: 1
 
 hyperparameters:
-  alpha: 0.1
   gamma: 0.99
-  epsilon: 0.0
-  safe_min: 80
-  safe_max: 120
+  alpha: 0.1
+  initial_q: -125.0
+  epsilon_start: 0.5
+  epsilon_min: 0.1
+  epsilon_decay: 1.0
+  underflow_penalty_constant: 0.0
+  overflow_penalty_constant: 0.0
+  safe_min: 74
+  safe_max: 76
+  starting_switch_point: 45
 
 database:
-  enabled: false
+  enabled: True
+  name: "filling_data"
+  user: "root"
+  password: "6637"
+  host: "127.0.0.1"
+  port: 3306
 
 communication:
   tcp:
@@ -29,6 +38,5 @@ communication:
     timeout: 2.0
   modbus:
     host: 127.0.0.1
-    port: 502
+    port: 1502
     register: 40010
-

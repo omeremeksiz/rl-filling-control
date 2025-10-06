@@ -56,23 +56,23 @@ def main() -> None:
     overflow_penalty_constant = float(hp.get("overflow_penalty_constant"))
     safe_min = int(hp.get("safe_min"))
     safe_max = int(hp.get("safe_max"))  
-    starting_switch_point = int(hp.get("starting_switch_point"))
+    starting_sp = int(hp.get("starting_switch_point"))
 
     # MAB logic: bandit update over switch points
-    available_switch_points = dp.get_available_switch_points()
-    if not available_switch_points:
+    available_sps = dp.get_available_switch_points()
+    if not available_sps:
         raise RuntimeError("No switch points available from dataset.")
-    q_table: Dict[int, float] = {sp: 0.0 for sp in available_switch_points}
+    q_table: Dict[int, float] = {sp: 0.0 for sp in available_sps}
 
-    current_switch_point = starting_switch_point
+    current_sp = starting_sp
     trajectory_ep: List[int] = []
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
 
     for ep in range(episodes):
-        unused = dp.get_unused_sessions_for_switch_point(current_switch_point)
+        unused = dp.get_unused_sessions_for_switch_point(current_sp)
         selected = random.choice(unused)
-        dp.mark_session_as_used(current_switch_point, selected)
+        dp.mark_session_as_used(current_sp, selected)
 
         episode_length = selected.episode_length
         final_weight = selected.final_weight
@@ -80,20 +80,20 @@ def main() -> None:
                                  overflow_penalty_constant, underflow_penalty_constant)
 
         # Bandit update: Q(sp) <- Q(sp) + alpha * (reward - Q(sp))
-        q_table[current_switch_point] = q_table[current_switch_point] + alpha * (reward - q_table[current_switch_point])
+        q_table[current_sp] = q_table[current_sp] + alpha * (reward - q_table[current_sp])
 
         best_sp = max(q_table, key=q_table.get)
         termination_type = "safe" if (safe_min <= final_weight <= safe_max) else ("underweight" if final_weight < safe_min else "overweight")
         logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-        logger.info(f"Experienced Switching Point: {current_switch_point}")
+        logger.info(f"Experienced Switching Point: {current_sp}")
         logger.info(f"Termination Type: {termination_type}")
 
         # Epsilon-greedy next action: step +1 from current or best
         explored_choice = None
         if random.random() < epsilon:
-            idx = available_switch_points.index(current_switch_point)
-            target = min(idx + 1, len(available_switch_points) - 1)
-            next_sp = available_switch_points[target]
+            idx = available_sps.index(current_sp)
+            target = min(idx + 1, len(available_sps) - 1)
+            next_sp = available_sps[target]
             explored_choice = next_sp
         else:
             next_sp = best_sp
@@ -107,7 +107,7 @@ def main() -> None:
         trajectory_ep.append(ep + 1)
         model_selected_list.append(best_sp)
         explored_list.append(explored_choice)
-        current_switch_point = next_sp
+        current_sp = next_sp
 
     # Legacy plots
     plot_qvalue_vs_state_bandit(q_table, paths['qvalue_vs_state_path'])

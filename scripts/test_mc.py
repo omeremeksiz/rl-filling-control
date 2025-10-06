@@ -15,7 +15,7 @@ from utils.plotting_utils import (
     plot_switching_trajectory_with_exploration,
 )
 from utils.database_utils import DatabaseHandler
-from utils.data_processing import DataProcessor, EpisodeMeta, SWITCH_TOKEN, TERMINATION_TOKEN
+from utils.data_processing import DataProcessor, EpisodeMeta
 
 
 def init_database_handler(cfg: Dict[str, Any], logger) -> Optional[DatabaseHandler]:
@@ -160,7 +160,7 @@ def build_mc_trajectory(
     trajectory: List[Tuple[int, int, float]] = []
     step_cost = -1.0
     for w in weight_sequence:
-        if w in (SWITCH_TOKEN, TERMINATION_TOKEN):
+        if w in (-1, 300):
             continue
         action = 1 if w < current_switch_point else -1
         trajectory.append((w, action, step_cost))
@@ -196,7 +196,7 @@ def main() -> None:
     overflow_penalty_constant = float(hp.get("overflow_penalty_constant"))
     safe_min = int(hp.get("safe_min"))
     safe_max = int(hp.get("safe_max"))
-    starting_switch_point = int(hp.get("starting_switch_point"))
+    starting_sp = int(hp.get("starting_switch_point"))
 
     comm_cfg = cfg.get("communication", {})
     tcp_cfg = comm_cfg.get("tcp", {})
@@ -222,9 +222,9 @@ def main() -> None:
 
     q_table: Dict[Tuple[int, int], float] = {}
     positive_updates: Set[int] = set()
-    known_switch_points: List[int] = [starting_switch_point]
+    known_sps: List[int] = [starting_sp]
 
-    current_switch_point = starting_switch_point
+    current_sp = starting_sp
     traj_ep: List[int] = []
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
@@ -232,9 +232,9 @@ def main() -> None:
     try:
         for ep in range(episodes):
             logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-            logger.info(f"Dispatching switching point: {current_switch_point}")
+            logger.info(f"Dispatching switching point: {current_sp}")
 
-            modbus.send_switch_point(float(current_switch_point))
+            modbus.send_switch_point(float(current_sp))
 
             raw_payloads: List[str] = []
             weight_trace: List[int] = []
@@ -258,7 +258,7 @@ def main() -> None:
                 )
 
             if session and meta and core_sequence:
-                weight_sequence = [w for w in session.weight_sequence[:-1] if w not in (SWITCH_TOKEN, TERMINATION_TOKEN)]
+                weight_sequence = [w for w in session.weight_sequence[:-1] if w not in (-1, 300)]
                 final_weight = meta.final_weight if meta.final_weight is not None else (session.final_weight or 0)
             else:
                 weight_sequence = weight_trace.copy()
@@ -267,13 +267,13 @@ def main() -> None:
 
             for state in weight_sequence:
                 ensure_q_entries(q_table, state, initial_q)
-                if state not in known_switch_points:
-                    known_switch_points.append(state)
-            known_switch_points = sorted(set(known_switch_points))
+                if state not in known_sps:
+                    known_sps.append(state)
+            known_sps = sorted(set(known_sps))
 
             trajectory = build_mc_trajectory(
                 weight_sequence,
-                current_switch_point,
+                current_sp,
                 final_weight,
                 safe_min,
                 safe_max,
@@ -298,23 +298,23 @@ def main() -> None:
                 if best is None or value > best[1]:
                     state_to_best[state] = (action, value)
 
-            best_switch_point = current_switch_point
+            best_sp = current_sp
             for state in sorted(state_to_best.keys()):
                 if state_to_best[state][0] == -1:
-                    best_switch_point = state
+                    best_sp = state
                     break
 
             explored_choice: Optional[int] = None
-            if random.random() < epsilon and len(known_switch_points) > 1:
-                if current_switch_point in known_switch_points:
-                    idx = known_switch_points.index(current_switch_point)
-                    target = min(idx + 1, len(known_switch_points) - 1)
-                    explored_choice = known_switch_points[target]
-                    next_switch_point = explored_choice
+            if random.random() < epsilon and len(known_sps) > 1:
+                if current_sp in known_sps:
+                    idx = known_sps.index(current_sp)
+                    target = min(idx + 1, len(known_sps) - 1)
+                    explored_choice = known_sps[target]
+                    next_sp = explored_choice
                 else:
-                    next_switch_point = best_switch_point
+                    next_sp = best_sp
             else:
-                next_switch_point = best_switch_point
+                next_sp = best_sp
 
             epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
@@ -323,12 +323,12 @@ def main() -> None:
                 else ("underweight" if final_weight < safe_min else "overweight")
             )
             logger.info(f"Termination Type: {termination_label}")
-            logger.info(f"Model-Selected Next Switching Point: {best_switch_point}")
+            logger.info(f"Model-Selected Next Switching Point: {best_sp}")
             logger.info(f"Explored Switching Point: {explored_choice}")
             logger.info("")
 
             traj_ep.append(ep + 1)
-            model_selected_list.append(best_switch_point)
+            model_selected_list.append(best_sp)
             explored_list.append(explored_choice)
 
             persist_episode(
@@ -336,7 +336,7 @@ def main() -> None:
                 logger,
                 raw_data=meta.raw_data if meta and meta.raw_data else raw_combined,
                 weight_sequence=weight_sequence or (weight_trace if weight_trace else [final_weight]),
-                switch_point=int(current_switch_point),
+                switch_point=int(current_sp),
                 episode_length=meta.episode_length if meta and meta.episode_length is not None else max(1, len(weight_sequence)),
                 final_weight=int(final_weight),
                 safe_min=safe_min,
@@ -345,7 +345,7 @@ def main() -> None:
                 meta=meta,
             )
 
-            current_switch_point = next_switch_point
+            current_sp = next_sp
 
     finally:
         tcp.close()

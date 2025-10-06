@@ -164,8 +164,8 @@ def main() -> None:
     safe_max = int(hp.get("safe_max"))
     overflow_penalty_constant = float(hp.get("overflow_penalty_constant"))
     underflow_penalty_constant = float(hp.get("underflow_penalty_constant"))
-    available_switch_points = list(range(safe_max + 1))  # 0 to safe_max inclusive
-    starting_switch_point = int(hp.get("starting_switch_point"))
+    available_sps = list(range(safe_max + 1))  # 0 to safe_max inclusive
+    starting_sp = int(hp.get("starting_switch_point"))
 
     comm_cfg = cfg.get("communication", {})
     tcp_cfg = comm_cfg.get("tcp", {})
@@ -186,8 +186,8 @@ def main() -> None:
         logger.error("Failed to connect to one of the communication endpoints; aborting test run.")
         return
 
-    q_table: Dict[int, float] = {sp: 0.0 for sp in available_switch_points}
-    current_switch_point = starting_switch_point
+    q_table: Dict[int, float] = {sp: 0.0 for sp in available_sps}
+    current_sp = starting_sp
 
     db_handler = init_database_handler(cfg, logger)
     data_processor = DataProcessor()
@@ -201,9 +201,9 @@ def main() -> None:
     try:
         for ep in range(episodes):
             logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-            logger.info(f"Dispatching switching point: {current_switch_point}")
+            logger.info(f"Dispatching switching point: {current_sp}")
 
-            modbus.send_switch_point(float(current_switch_point))
+            modbus.send_switch_point(float(current_sp))
 
             raw_payloads: List[str] = []
             weight_samples: List[int] = []
@@ -238,12 +238,12 @@ def main() -> None:
                 episode_length = length_candidate if length_candidate is not None else len(weight_samples)
 
                 switch_for_storage = (
-                    session.switch_point if session.switch_point is not None else current_switch_point
+                    session.switch_point if session.switch_point is not None else current_sp
                 )
             else:
                 episode_length = len(weight_samples)
                 final_weight = int(max(0.0, float(np.mean(weight_samples)) if weight_samples else 0.0))
-                switch_for_storage = current_switch_point
+                switch_for_storage = current_sp
                 core_sequence = weight_samples.copy()
                 meta = meta if meta else None
 
@@ -261,30 +261,30 @@ def main() -> None:
             )
             episode_rewards.append(reward)
 
-            q_table[current_switch_point] = q_table[current_switch_point] + alpha * (reward - q_table[current_switch_point])
+            q_table[current_sp] = q_table[current_sp] + alpha * (reward - q_table[current_sp])
 
-            best_switch_point = max(q_table, key=q_table.get)
+            best_sp = max(q_table, key=q_table.get)
             termination = (
                 "Normal" if safe_min <= final_weight <= safe_max
                 else ("Underflow" if final_weight < safe_min else "Overflow")
             )
             logger.info(f"Termination Type: {termination}")
             logger.info(f"Observed final weight: {final_weight}")
-            logger.info(f"Model-Selected Next Switching Point: {best_switch_point}")
+            logger.info(f"Model-Selected Next Switching Point: {best_sp}")
 
             explored_choice: Optional[int] = None
             if random.random() < epsilon:
-                idx = available_switch_points.index(current_switch_point)
-                next_idx = min(idx + 1, len(available_switch_points) - 1)
-                explored_choice = available_switch_points[next_idx]
-                next_switch_point = explored_choice
+                idx = available_sps.index(current_sp)
+                next_idx = min(idx + 1, len(available_sps) - 1)
+                explored_choice = available_sps[next_idx]
+                next_sp = explored_choice
             else:
-                next_switch_point = best_switch_point
+                next_sp = best_sp
 
             epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
             episode_indices.append(ep + 1)
-            model_selected_list.append(best_switch_point)
+            model_selected_list.append(best_sp)
             explored_list.append(explored_choice)
 
             persist_episode(
@@ -301,7 +301,7 @@ def main() -> None:
                 meta=meta,
             )
 
-            current_switch_point = next_switch_point
+            current_sp = next_sp
 
     finally:
         tcp.close()
