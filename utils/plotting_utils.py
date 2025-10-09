@@ -7,32 +7,43 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 
-def _state_to_max_values(q_table: Mapping[Tuple[int, int], float]) -> Dict[int, float]:
-    state_max: Dict[int, float] = {}
-    for (state, _action), value in q_table.items():
-        if state in state_max:
-            state_max[state] = max(state_max[state], value)
-        else:
-            state_max[state] = value
-    return state_max
-
-
 def plot_qvalue_vs_state_from_pair_table(q_table: Mapping[Tuple[int, int], float], out_path: str) -> None:
-    state_to_max = _state_to_max_values(q_table)
-    switch_points: List[int] = sorted(state_to_max.keys())
-    q_vals: List[float] = [state_to_max[s] for s in switch_points]
+    states = sorted({state for state, _ in q_table.keys()})
+    q_fast = [q_table.get((state, 1), 0.0) for state in states]
+    q_slow = [q_table.get((state, -1), 0.0) for state in states]
 
-    plt.figure(figsize=(12, 6))
-    bars = plt.bar(switch_points, q_vals, alpha=0.7, color="skyblue")
-    if switch_points:
-        best_state = max(state_to_max, key=state_to_max.get)
-        highlight_idx = switch_points.index(best_state)
-        bars[highlight_idx].set_color("red")
+    plt.figure(figsize=(14, 6), dpi=300)
+    plt.bar(
+        states,
+        q_fast,
+        width=1.0,
+        color="tab:red",
+        alpha=0.8,
+        label="Action = 1",
+        align="center",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    plt.bar(
+        states,
+        q_slow,
+        width=1.0,
+        color="tab:blue",
+        alpha=0.55,
+        label="Action = -1",
+        align="center",
+        edgecolor="black",
+        linewidth=0.5,
+    )
 
-    plt.title("Q-Value vs State (Switch Points)")
-    plt.xlabel("Switch Point")
-    plt.ylabel("Q-Value")
-    plt.grid(True, alpha=0.3)
+    plt.axhline(0, color="black", linewidth=0.8, alpha=0.5)
+    plt.xticks(states, states, rotation=45, ha="right", fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.title("Q-Values by State and Action")
+    plt.xlabel("State (Weight)", fontsize=10)
+    plt.ylabel("Q-Value", fontsize=10)
+    plt.grid(axis="y", alpha=0.25)
+    plt.legend(fontsize=9)
     plt.tight_layout()
     plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()

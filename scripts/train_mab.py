@@ -5,12 +5,12 @@ import json
 import os
 import random
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import yaml
 from utils.data_processing import DataProcessor
-from utils.excel_logging import write_mab_qtable
+from utils.excel_logging import write_mab_qtable_to_excel
 from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
 from utils.plotting_utils import (
     plot_qvalue_vs_state_bandit,
@@ -31,6 +31,37 @@ def calc_reward_mab(episode_length: int, final_weight: int, safe_min: int, safe_
         else:
             penalty = (safe_min - final_weight) * underflow_penalty_constant
         return base_reward + penalty
+
+def _pick_next_switch_point(
+    best_switch_point: int,
+    candidates: List[int],
+    epsilon: float,
+    weights: Optional[List[float]],
+) -> Tuple[int, Optional[int]]:
+    if random.random() >= epsilon: # no exploration, stay with best sp
+        return best_switch_point, None
+
+    base_idx = candidates.index(best_switch_point)
+    
+    total = sum(weights)
+    if total <= 0.0:
+        return best_switch_point, None
+
+    roll = random.random() * total
+    cumulative = 0.0
+    offset = 1
+    for step, weight in enumerate(weights, start=1):
+        cumulative += weight
+        if roll <= cumulative:
+            offset = step
+            break
+
+    target_idx = min(base_idx + offset, len(candidates) - 1)
+    if target_idx == base_idx:
+        return best_switch_point, None
+
+    next_sp = candidates[target_idx]
+    return next_sp, next_sp
 
 def main() -> None:
     cfg = load_config()
@@ -60,6 +91,7 @@ def main() -> None:
     safe_min = int(hp.get("safe_min"))
     safe_max = int(hp.get("safe_max"))  
     starting_sp = int(hp.get("starting_switch_point"))
+    step_weights = hp.get("exploration_step_weights")
 
     # MAB logic: bandit update over switch points
     available_sps = dp.get_available_switch_points()
@@ -100,15 +132,13 @@ def main() -> None:
         logger.info(f"Experienced Switching Point: {experienced_sp}")
         logger.info(f"Termination Type: {termination_type}")
 
-        # Epsilon-greedy next action: step +1 from current or best
-        explored_choice = None
-        if random.random() < epsilon:
-            idx = available_sps.index(experienced_sp)
-            target = min(idx + 1, len(available_sps) - 1)
-            next_sp = available_sps[target]
-            explored_choice = next_sp
-        else:
-            next_sp = best_sp
+        # Weighted epsilon-greedy exploration around the current best switch point
+        next_sp, explored_choice = _pick_next_switch_point(
+            best_sp,
+            available_sps,
+            epsilon,
+            step_weights,
+        )
 
         logger.info(f"Model-Selected Next Switching Point: {best_sp}")
         logger.info(f"Explored Switching Point: {explored_choice}")
@@ -139,7 +169,7 @@ def main() -> None:
 
     if episode_records:
         excel_output_path = os.path.join(output_dir, "mab_qvalue_updates.xlsx")
-        write_mab_qtable(episode_records, excel_output_path)
+        write_mab_qtable_to_excel(episode_records, excel_output_path)
         logger.info("Saved MAB Q-value updates to %s", excel_output_path)
 
     metrics = {

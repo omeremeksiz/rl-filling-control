@@ -22,6 +22,7 @@ hyperparameters:
   safe_min: 74
   safe_max: 76
   starting_switch_point: 45
+  exploration_step_weights: [5.0, 4.0, 3.0, 2.0, 1.0]
 
 database:
   enabled: True
@@ -40,5 +41,4 @@ communication:
     host: 127.0.0.1
     port: 1502
     register: 40010
-
 

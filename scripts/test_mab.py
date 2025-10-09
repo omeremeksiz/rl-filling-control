@@ -5,7 +5,7 @@ import json
 import os
 import random
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import yaml
@@ -145,6 +145,38 @@ def calc_reward_mab(episode_length: int, final_weight: int, safe_min: int, safe_
     return base_reward + penalty
 
 
+def _pick_next_switch_point(
+    best_switch_point: int,
+    candidates: List[int],
+    epsilon: float,
+    weights: Optional[List[float]],
+) -> Tuple[int, Optional[int]]:
+    if random.random() >= epsilon: # no exploration, stay with best sp
+        return best_switch_point, None
+
+    base_idx = candidates.index(best_switch_point)
+    
+    total = sum(weights)
+    if total <= 0.0:
+        return best_switch_point, None
+
+    roll = random.random() * total
+    cumulative = 0.0
+    offset = 1
+    for step, weight in enumerate(weights, start=1):
+        cumulative += weight
+        if roll <= cumulative:
+            offset = step
+            break
+
+    target_idx = min(base_idx + offset, len(candidates) - 1)
+    if target_idx == base_idx:
+        return best_switch_point, None
+
+    next_sp = candidates[target_idx]
+    return next_sp, next_sp
+
+
 def main() -> None:
     cfg = load_config()
     rng_seed = int(cfg.get("seed", 42))
@@ -169,6 +201,7 @@ def main() -> None:
     underflow_penalty_constant = float(hp.get("underflow_penalty_constant"))
     available_sps = list(range(safe_max + 1))  # 0 to safe_max inclusive
     starting_sp = int(hp.get("starting_switch_point"))
+    step_weights = hp.get("exploration_step_weights")
 
     comm_cfg = cfg.get("communication", {})
     tcp_cfg = comm_cfg.get("tcp", {})
@@ -278,14 +311,12 @@ def main() -> None:
             logger.info(f"Observed final weight: {final_weight}")
             logger.info(f"Model-Selected Next Switching Point: {best_sp}")
 
-            explored_choice: Optional[int] = None
-            if random.random() < epsilon:
-                idx = available_sps.index(current_sp)
-                next_idx = min(idx + 1, len(available_sps) - 1)
-                explored_choice = available_sps[next_idx]
-                next_sp = explored_choice
-            else:
-                next_sp = best_sp
+            next_sp, explored_choice = _pick_next_switch_point(
+                best_sp,
+                available_sps,
+                epsilon,
+                step_weights,
+            )
 
             epsilon = max(epsilon_min, epsilon * epsilon_decay)
 

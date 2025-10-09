@@ -144,6 +144,38 @@ def calc_reward_q(final_weight: int, safe_min: int, safe_max: int,
     return base_reward + penalty
 
 
+def _pick_next_switch_point(
+    best_switch_point: int,
+    candidates: List[int],
+    epsilon: float,
+    weights: Optional[List[float]],
+) -> Tuple[int, Optional[int]]:
+    if random.random() >= epsilon: # no exploration, stay with best sp
+        return best_switch_point, None
+
+    base_idx = candidates.index(best_switch_point)
+    
+    total = sum(weights)
+    if total <= 0.0:
+        return best_switch_point, None
+
+    roll = random.random() * total
+    cumulative = 0.0
+    offset = 1
+    for step, weight in enumerate(weights, start=1):
+        cumulative += weight
+        if roll <= cumulative:
+            offset = step
+            break
+
+    target_idx = min(base_idx + offset, len(candidates) - 1)
+    if target_idx == base_idx:
+        return best_switch_point, None
+
+    next_sp = candidates[target_idx]
+    return next_sp, next_sp
+
+
 def ensure_q_entries(q_table: Dict[Tuple[int, int], float], state: int, initial_q: float) -> None:
     if (state, 1) not in q_table:
         q_table[(state, 1)] = initial_q
@@ -207,6 +239,7 @@ def main() -> None:
     safe_min = int(hp.get("safe_min"))
     safe_max = int(hp.get("safe_max"))
     starting_sp = int(hp.get("starting_switch_point"))
+    step_weights = hp.get("exploration_step_weights")
 
     comm_cfg = cfg.get("communication", {})
     tcp_cfg = comm_cfg.get("tcp", {})
@@ -329,17 +362,12 @@ def main() -> None:
                     best_sp = state
                     break
 
-            explored_choice: Optional[int] = None
-            if random.random() < epsilon and len(known_sps) > 1:
-                if experienced_sp in known_sps:
-                    idx = known_sps.index(experienced_sp)
-                    target = min(idx + 1, len(known_sps) - 1)
-                    explored_choice = known_sps[target]
-                    next_sp = explored_choice
-                else:
-                    next_sp = best_sp
-            else:
-                next_sp = best_sp
+            next_sp, explored_choice = _pick_next_switch_point(
+                best_sp,
+                known_sps,
+                epsilon,
+                step_weights,
+            )
 
             epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
