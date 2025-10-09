@@ -1,5 +1,4 @@
-"""Database utilities for saving real-world filling episodes."""
-
+# utils/database_utils.py
 from __future__ import annotations
 
 import json
@@ -19,8 +18,6 @@ DEFAULT_DB_CONFIG: Dict[str, Any] = {
 }
 
 class DatabaseHandler:
-    """Handles database operations for real-world filling episodes."""
-
     def __init__(self, db_config: Optional[Dict[str, Any]] = None) -> None:
         merged_config = {**DEFAULT_DB_CONFIG, **(db_config or {})}
         if isinstance(merged_config.get("port"), str):

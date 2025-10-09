@@ -1,3 +1,4 @@
+# utils/plotting_utils.py
 from __future__ import annotations
 
 from typing import Dict, Iterable, Mapping, Tuple, List, Optional
@@ -17,7 +18,6 @@ def _state_to_max_values(q_table: Mapping[Tuple[int, int], float]) -> Dict[int, 
 
 
 def plot_qvalue_vs_state_from_pair_table(q_table: Mapping[Tuple[int, int], float], out_path: str) -> None:
-    """Render state-action values by taking the best action per state."""
     state_to_max = _state_to_max_values(q_table)
     switch_points: List[int] = sorted(state_to_max.keys())
     q_vals: List[float] = [state_to_max[s] for s in switch_points]
@@ -39,7 +39,6 @@ def plot_qvalue_vs_state_from_pair_table(q_table: Mapping[Tuple[int, int], float
 
 
 def plot_qvalue_vs_state_bandit(q_table: Mapping[int, float], out_path: str) -> None:
-    """Render bandit-style values (single value per switch point)."""
     switch_points: List[int] = sorted(q_table.keys())
     q_vals: List[float] = [q_table[sp] for sp in switch_points]
 
@@ -65,7 +64,6 @@ def plot_switching_trajectory_with_exploration(
     explored: Iterable[Optional[int]],
     out_path: str,
 ) -> None:
-    """Plot how the selected switch point evolves, highlighting exploration steps."""
     ep_list = list(episode_nums)
     model_list = list(model_selected)
     explored_list = list(explored)

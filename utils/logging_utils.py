@@ -1,3 +1,4 @@
+# utils/logging_utils.py
 from __future__ import annotations
 
 import logging
@@ -13,10 +14,6 @@ def _ensure_dir(path: str) -> None:
 
 
 def setup_legacy_training_logger(base_dir: str = "output") -> Tuple[logging.Logger, str, str]:
-    """
-    Match legacy layout exactly: output/<timestamp_uuid>/training_process.log
-    Returns: (logger, output_dir, log_path)
-    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_id = str(uuid.uuid4())[:6]
     training_id = f"{timestamp}_{unique_id}"

@@ -1,14 +1,17 @@
+# scripts/test_mc.py
 from __future__ import annotations
 
 import json
 import os
 import random
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Set
 
 import numpy as np
 import yaml
 
 from utils.communication_utils import create_modbus_client, create_tcp_client, parse_live_payload_to_floats
+from utils.excel_logging import write_qtable_to_excel
 from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
@@ -228,13 +231,16 @@ def main() -> None:
     traj_ep: List[int] = []
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
+    update_counts = defaultdict(int)
+    episode_records: List[Dict[str, Any]] = []
 
     try:
         for ep in range(episodes):
+            experienced_sp = current_sp
             logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-            logger.info(f"Dispatching switching point: {current_sp}")
+            logger.info(f"Dispatching switching point: {experienced_sp}")
 
-            modbus.send_switch_point(float(current_sp))
+            modbus.send_switch_point(float(experienced_sp))
 
             raw_payloads: List[str] = []
             weight_trace: List[int] = []
@@ -273,7 +279,7 @@ def main() -> None:
 
             trajectory = build_mc_trajectory(
                 weight_sequence,
-                current_sp,
+                experienced_sp,
                 final_weight,
                 safe_min,
                 safe_max,
@@ -289,6 +295,7 @@ def main() -> None:
                     continue
                 q_sa = q_table[(state, action)]
                 q_table[(state, action)] = q_sa + alpha * (G - q_sa)
+                update_counts[(state, action)] += 1
                 if action == 1:
                     positive_updates.add(state)
 
@@ -298,7 +305,7 @@ def main() -> None:
                 if best is None or value > best[1]:
                     state_to_best[state] = (action, value)
 
-            best_sp = current_sp
+            best_sp = experienced_sp
             for state in sorted(state_to_best.keys()):
                 if state_to_best[state][0] == -1:
                     best_sp = state
@@ -306,8 +313,8 @@ def main() -> None:
 
             explored_choice: Optional[int] = None
             if random.random() < epsilon and len(known_sps) > 1:
-                if current_sp in known_sps:
-                    idx = known_sps.index(current_sp)
+                if experienced_sp in known_sps:
+                    idx = known_sps.index(experienced_sp)
                     target = min(idx + 1, len(known_sps) - 1)
                     explored_choice = known_sps[target]
                     next_sp = explored_choice
@@ -318,11 +325,14 @@ def main() -> None:
 
             epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
-            termination_label = (
-                "safe" if safe_min <= final_weight <= safe_max
-                else ("underweight" if final_weight < safe_min else "overweight")
-            )
-            logger.info(f"Termination Type: {termination_label}")
+            if safe_min <= final_weight <= safe_max:
+                termination_type = "Normal"
+            elif final_weight < safe_min:
+                termination_type = "Underflow"
+            else:
+                termination_type = "Overflow"
+
+            logger.info(f"Termination Type: {termination_type}")
             logger.info(f"Model-Selected Next Switching Point: {best_sp}")
             logger.info(f"Explored Switching Point: {explored_choice}")
             logger.info("")
@@ -336,13 +346,25 @@ def main() -> None:
                 logger,
                 raw_data=meta.raw_data if meta and meta.raw_data else raw_combined,
                 weight_sequence=weight_sequence or (weight_trace if weight_trace else [final_weight]),
-                switch_point=int(current_sp),
+                switch_point=int(experienced_sp),
                 episode_length=meta.episode_length if meta and meta.episode_length is not None else max(1, len(weight_sequence)),
                 final_weight=int(final_weight),
                 safe_min=safe_min,
                 safe_max=safe_max,
                 q_values_snapshot=q_table.copy(),
                 meta=meta,
+            )
+
+            episode_records.append(
+                {
+                    "episode_num": ep,
+                    "experienced_switching_point": experienced_sp,
+                    "model_selected_switching_point": best_sp,
+                    "explored_switching_point": explored_choice,
+                    "termination_type": termination_type,
+                    "q_table": dict(q_table),
+                    "counts": dict(update_counts),
+                }
             )
 
             current_sp = next_sp
@@ -361,6 +383,11 @@ def main() -> None:
         explored_list,
         paths['switching_point_trajectory_path'],
     )
+
+    if episode_records:
+        excel_output_path = os.path.join(output_dir, "mc_qvalue_updates.xlsx")
+        write_qtable_to_excel(episode_records, excel_output_path)
+        logger.info("Saved MC Q-value updates to %s", excel_output_path)
 
     metrics = {
         "episodes": episodes,

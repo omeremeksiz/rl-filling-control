@@ -1,14 +1,17 @@
+# scripts/test_mab.py
 from __future__ import annotations
 
 import json
 import os
 import random
+from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yaml
 
 from utils.communication_utils import create_modbus_client, create_tcp_client, parse_live_payload_to_floats
+from utils.excel_logging import write_mab_qtable_to_excel
 from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
 from utils.plotting_utils import (
     plot_qvalue_vs_state_bandit,
@@ -188,6 +191,8 @@ def main() -> None:
 
     q_table: Dict[int, float] = {sp: 0.0 for sp in available_sps}
     current_sp = starting_sp
+    update_counts = defaultdict(int)
+    episode_records: List[Dict[str, Any]] = []
 
     db_handler = init_database_handler(cfg, logger)
     data_processor = DataProcessor()
@@ -200,10 +205,11 @@ def main() -> None:
 
     try:
         for ep in range(episodes):
+            experienced_sp = current_sp
             logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-            logger.info(f"Dispatching switching point: {current_sp}")
+            logger.info(f"Dispatching switching point: {experienced_sp}")
 
-            modbus.send_switch_point(float(current_sp))
+            modbus.send_switch_point(float(experienced_sp))
 
             raw_payloads: List[str] = []
             weight_samples: List[int] = []
@@ -301,6 +307,20 @@ def main() -> None:
                 meta=meta,
             )
 
+            update_counts[experienced_sp] += 1
+
+            episode_records.append(
+                {
+                    "episode_num": ep,
+                    "experienced_switching_point": experienced_sp,
+                    "model_selected_switching_point": best_sp,
+                    "explored_switching_point": explored_choice,
+                    "termination_type": termination,
+                    "q_table": dict(q_table),
+                    "counts": dict(update_counts),
+                }
+            )
+
             current_sp = next_sp
 
     finally:
@@ -316,6 +336,11 @@ def main() -> None:
         explored_list,
         paths['switching_point_trajectory_path'],
     )
+
+    if episode_records:
+        excel_output_path = os.path.join(output_dir, "mab_qvalue_updates.xlsx")
+        write_mab_qtable_to_excel(episode_records, excel_output_path)
+        logger.info("Saved MAB Q-value updates to %s", excel_output_path)
 
     metrics = {
         "episodes": episodes,

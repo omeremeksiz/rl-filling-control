@@ -1,13 +1,16 @@
+# scripts/train_mab.py
 from __future__ import annotations
 
 import json
 import os
 import random
+from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yaml
 from utils.data_processing import DataProcessor
+from utils.excel_logging import write_mab_qtable
 from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
 from utils.plotting_utils import (
     plot_qvalue_vs_state_bandit,
@@ -68,11 +71,14 @@ def main() -> None:
     trajectory_ep: List[int] = []
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
+    update_counts = defaultdict(int)
+    episode_records: List[Dict[str, Any]] = []
 
     for ep in range(episodes):
-        unused = dp.get_unused_sessions_for_switch_point(current_sp)
+        experienced_sp = current_sp
+        unused = dp.get_unused_sessions_for_switch_point(experienced_sp)
         selected = random.choice(unused)
-        dp.mark_session_as_used(current_sp, selected)
+        dp.mark_session_as_used(experienced_sp, selected)
 
         episode_length = selected.episode_length
         final_weight = selected.final_weight
@@ -80,18 +86,24 @@ def main() -> None:
                                  overflow_penalty_constant, underflow_penalty_constant)
 
         # Bandit update: Q(sp) <- Q(sp) + alpha * (reward - Q(sp))
-        q_table[current_sp] = q_table[current_sp] + alpha * (reward - q_table[current_sp])
+        q_table[experienced_sp] = q_table[experienced_sp] + alpha * (reward - q_table[experienced_sp])
+        update_counts[experienced_sp] += 1
 
         best_sp = max(q_table, key=q_table.get)
-        termination_type = "safe" if (safe_min <= final_weight <= safe_max) else ("underweight" if final_weight < safe_min else "overweight")
+        if safe_min <= final_weight <= safe_max:
+            termination_type = "Normal"
+        elif final_weight < safe_min:
+            termination_type = "Underflow"
+        else:
+            termination_type = "Overflow"
         logger.info(f"--- Episode {ep + 1}/{episodes} ---")
-        logger.info(f"Experienced Switching Point: {current_sp}")
+        logger.info(f"Experienced Switching Point: {experienced_sp}")
         logger.info(f"Termination Type: {termination_type}")
 
         # Epsilon-greedy next action: step +1 from current or best
         explored_choice = None
         if random.random() < epsilon:
-            idx = available_sps.index(current_sp)
+            idx = available_sps.index(experienced_sp)
             target = min(idx + 1, len(available_sps) - 1)
             next_sp = available_sps[target]
             explored_choice = next_sp
@@ -107,11 +119,28 @@ def main() -> None:
         trajectory_ep.append(ep + 1)
         model_selected_list.append(best_sp)
         explored_list.append(explored_choice)
+
+        episode_records.append(
+            {
+                "episode_num": ep,
+                "experienced_switching_point": experienced_sp,
+                "model_selected_switching_point": best_sp,
+                "explored_switching_point": explored_choice,
+                "termination_type": termination_type,
+                "q_table": dict(q_table),
+                "counts": dict(update_counts),
+            }
+        )
         current_sp = next_sp
 
     # Legacy plots
     plot_qvalue_vs_state_bandit(q_table, paths['qvalue_vs_state_path'])
     plot_switching_trajectory_with_exploration(trajectory_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])
+
+    if episode_records:
+        excel_output_path = os.path.join(output_dir, "mab_qvalue_updates.xlsx")
+        write_mab_qtable(episode_records, excel_output_path)
+        logger.info("Saved MAB Q-value updates to %s", excel_output_path)
 
     metrics = {
         "episodes": episodes,
