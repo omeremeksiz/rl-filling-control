@@ -12,7 +12,11 @@ import yaml
 
 from utils.communication_utils import create_modbus_client, create_tcp_client, parse_live_payload_to_floats
 from utils.excel_logging import write_mab_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_bandit,
     plot_switching_trajectory_with_exploration,
@@ -127,9 +131,11 @@ def persist_episode(
         logger.error(f"Failed to update statistics: {exc}")
 
 
+CONFIG_PATH = os.path.join("configs", "mab_test.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    config_path = os.path.join("configs", "mab_test.yaml")
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -185,6 +191,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     test_cfg = cfg.get("testing", {})
     episodes = int(test_cfg.get("episodes"))

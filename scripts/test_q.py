@@ -12,7 +12,11 @@ import yaml
 
 from utils.communication_utils import create_modbus_client, create_tcp_client, parse_live_payload_to_floats
 from utils.excel_logging import write_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
     plot_switching_trajectory_with_exploration,
@@ -126,9 +130,11 @@ def persist_episode(
         logger.error(f"Failed to update statistics: {exc}")
 
 
+CONFIG_PATH = os.path.join("configs", "q_test.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    config_path = os.path.join("configs", "q_test.yaml")
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -196,11 +202,15 @@ def build_episode_sequences(
     actions: List[int] = []
     rewards: List[float] = []
 
+    post_switch = False
     for w in weight_sequence:
-        if w in (-1, 300):
+        if w == -1:
+            post_switch = True
             continue
+        if w == 300:
+            break
         states.append(w)
-        actions.append(1 if w < current_sp else -1)
+        actions.append(-1 if post_switch else 1)
         rewards.append(0.0)
 
     if states:
@@ -222,6 +232,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     test_cfg = cfg.get("testing", {})
     episodes = int(test_cfg.get("episodes", 50))

@@ -11,14 +11,21 @@ import numpy as np
 import yaml
 from utils.data_processing import DataProcessor
 from utils.excel_logging import write_mab_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_bandit,
     plot_switching_trajectory_with_exploration,
 )
 
+CONFIG_PATH = os.path.join("configs", "mab_train.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    with open(os.path.join("configs", "mab_train.yaml"), "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
     
 def calc_reward_mab(episode_length: int, final_weight: int, safe_min: int, safe_max: int,
@@ -71,6 +78,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     # Load training data (absolute path enforced)
     dcfg = cfg.get("data")

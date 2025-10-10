@@ -12,14 +12,21 @@ import yaml
 
 from utils.data_processing import DataProcessor
 from utils.excel_logging import write_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
     plot_switching_trajectory_with_exploration,
 )
 
+CONFIG_PATH = os.path.join("configs", "q_train.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    with open(os.path.join("configs", "q_train.yaml"), "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 def calc_reward_q(final_weight: int, safe_min: int, safe_max: int,
@@ -72,6 +79,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     dcfg = cfg.get("data")
     excel_path = dcfg.get("path", "")
@@ -123,20 +131,33 @@ def main() -> None:
         actions: List[int] = []
         rewards: List[float] = []
         final_weight = s.final_weight if s.final_weight is not None else 0
-
-        for i, w in enumerate(s.weight_sequence):
-            if w in (-1, 300): 
+        
+        post_switch = False
+        total_reward = -len(s.weight_sequence) + calc_reward_q(
+            final_weight,
+            safe_min,
+            safe_max,
+            overflow_penalty_constant,
+            underflow_penalty_constant,
+        )
+        seen_pairs: Set[Tuple[int, int]] = set()
+        for w in s.weight_sequence:
+            if w == -1:
+                post_switch = True
                 continue
-            if i + 1 < len(s.weight_sequence) and s.weight_sequence[i + 1] == 300:
+            if w == 300:
+                break
+            a = -1 if post_switch else 1
+            pair = (w, a)
+            if pair in seen_pairs:
                 continue
-            a = 1 if w < experienced_sp else -1
+            seen_pairs.add(pair)
             states.append(w)
             actions.append(a)
-            rewards.append(-1.0)
+            rewards.append(total_reward)
 
         if states:
-            rewards[-1] += calc_reward_q(final_weight, safe_min, safe_max,
-                                 overflow_penalty_constant, underflow_penalty_constant)
+            rewards[-1] += total_reward
 
         for t in range(len(states)):
             s_t = states[t]
@@ -149,16 +170,19 @@ def main() -> None:
             best_next = max(q_fast, q_slow)
             q_sa = q_table[(s_t, a_t)]
             td_target = r_t + gamma * best_next
-            q_table[(s_t, a_t)] = q_sa + alpha * (td_target - q_sa)
             update_counts[(s_t, a_t)] += 1
+            q_table[(s_t, a_t)] = (q_sa + alpha * (td_target - q_sa)) / update_counts[(s_t, a_t)]
             if a_t == 1:
                 positive_updates.add(s_t)
 
         state_to_best = {}
         for (w, a), v in q_table.items():
+            if update_counts.get((w, 1), 0) < 1 or update_counts.get((w, -1), 0) < 1:
+                continue
             best = state_to_best.get(w)
             if best is None or v > best[1]:
                 state_to_best[w] = (a, v)
+
         best_sp = None
         for w in sorted(state_to_best.keys()):
             if state_to_best[w][0] == -1 and w in available_sps:

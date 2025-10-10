@@ -12,14 +12,21 @@ import yaml
 
 from utils.data_processing import DataProcessor
 from utils.excel_logging import write_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
     plot_switching_trajectory_with_exploration,
 )
 
+CONFIG_PATH = os.path.join("configs", "mc_train.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    with open(os.path.join("configs", "mc_train.yaml"), "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
     
 def calc_reward_mc(final_weight: int, safe_min: int, safe_max: int,
@@ -72,6 +79,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     dcfg = cfg.get("data")
     excel_path = dcfg.get("path", "")
@@ -123,14 +131,16 @@ def main() -> None:
 
         # Construct episodic (state, action, step_reward)
         trajectory: List[Tuple[int,int,float]] = []
-        # Use simple step cost -1 like original MC style
         step_cost = -1.0
-        # Fill until the state just before TERMINATION_TOKEN
-        for w in s.weight_sequence[:-1]:
-            if w in (-1, 300):
+        post_switch = False
+        for w in s.weight_sequence:
+            if w == -1:
+                post_switch = True
                 continue
-            a = 1 if w < experienced_sp else -1
-            trajectory.append((w, a, step_cost))
+            if w == 300:
+                break
+            action = -1 if post_switch else 1
+            trajectory.append((w, action, step_cost))
 
         # Append terminal reward from final weight
         final_weight = s.final_weight

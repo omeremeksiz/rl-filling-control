@@ -12,7 +12,11 @@ import yaml
 
 from utils.communication_utils import create_modbus_client, create_tcp_client, parse_live_payload_to_floats
 from utils.excel_logging import write_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
     plot_switching_trajectory_with_exploration,
@@ -126,8 +130,11 @@ def persist_episode(
         logger.error(f"Failed to update statistics: {exc}")
 
 
+CONFIG_PATH = os.path.join("configs", "td_test.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    with open(os.path.join("configs", "td_test.yaml"), "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -190,10 +197,14 @@ def build_td_trajectory(
     underflow_penalty_constant: float,
 ) -> List[Tuple[int, int, float]]:
     trajectory: List[Tuple[int, int, float]] = []
+    post_switch = False
     for w in weight_sequence:
-        if w in (SWITCH_TOKEN, TERMINATION_TOKEN):
+        if w == SWITCH_TOKEN:
+            post_switch = True
             continue
-        action = 1 if w < current_switch_point else -1
+        if w == TERMINATION_TOKEN:
+            break
+        action = -1 if post_switch else 1
         trajectory.append((w, action, 0.0))
     if trajectory:
         w_last, a_last, r_last = trajectory[-1]
@@ -216,6 +227,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     test_cfg = cfg.get("testing", {})
     episodes = int(test_cfg.get("episodes", 50))

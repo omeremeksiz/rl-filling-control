@@ -12,15 +12,22 @@ import yaml
 
 from utils.data_processing import DataProcessor
 from utils.excel_logging import write_qtable_to_excel
-from utils.logging_utils import setup_legacy_training_logger, get_legacy_output_paths
+from utils.logging_utils import (
+    setup_legacy_training_logger,
+    get_legacy_output_paths,
+    copy_config_to_output,
+)
 from utils.plotting_utils import (
     plot_qvalue_vs_state_from_pair_table,
     plot_switching_trajectory_with_exploration,
 )
 
 
+CONFIG_PATH = os.path.join("configs", "td_train.yaml")
+
+
 def load_config() -> Dict[str, Any]:
-    with open(os.path.join("configs", "td_train.yaml"), "r", encoding="utf-8") as f:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -74,6 +81,7 @@ def main() -> None:
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir="outputs")
     paths = get_legacy_output_paths(output_dir)
+    copy_config_to_output(CONFIG_PATH, output_dir)
 
     dcfg = cfg.get("data")
     excel_path = dcfg.get("path", "")
@@ -123,15 +131,16 @@ def main() -> None:
         # Build (state, action, reward) trajectory
         trajectory: List[Tuple[int,int,float]] = []
         final_weight = s.final_weight if s.final_weight is not None else 0
-        for i, w in enumerate(s.weight_sequence):
-            if w in (-1, 300):
+        post_switch = False
+        for w in s.weight_sequence:
+            if w == -1:
+                post_switch = True
                 continue
-            # skip final weight position (just before TERMINATION_TOKEN)
-            if i + 1 < len(s.weight_sequence) and s.weight_sequence[i + 1] == 300:
-                continue
-            a = 1 if w < experienced_sp else -1
+            if w == 300:
+                break
             step_reward = 0.0
-            trajectory.append((w, a, step_reward))
+            action = -1 if post_switch else 1
+            trajectory.append((w, action, step_reward))
 
         final_reward = calc_reward_td(
             final_weight,

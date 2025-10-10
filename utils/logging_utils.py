@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Tuple
@@ -46,5 +47,10 @@ def get_legacy_output_paths(output_dir: str) -> Dict[str, str]:
         'log_file_path': os.path.join(output_dir, "training_process.log"),
     }
 
+
+def copy_config_to_output(config_path: str, output_dir: str, destination_name: str = "config.yaml") -> str:
+    dest_path = os.path.join(output_dir, destination_name)
+    shutil.copy2(config_path, dest_path)
+    return dest_path
 
 
