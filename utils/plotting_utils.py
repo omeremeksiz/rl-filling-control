@@ -5,6 +5,7 @@ from typing import Dict, Iterable, Mapping, Tuple, List, Optional
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import numpy as np
 
 
 def plot_qvalue_vs_state_from_pair_table(q_table: Mapping[Tuple[int, int], float], out_path: str) -> None:
@@ -60,7 +61,7 @@ def plot_qvalue_vs_state_bandit(q_table: Mapping[int, float], out_path: str) -> 
         highlight_idx = switch_points.index(best_state)
         bars[highlight_idx].set_color("red")
 
-    plt.title("Q-Value vs State (Switch Points)")
+    plt.title("Q-Value vs Switch Point")
     plt.xlabel("Switch Point")
     plt.ylabel("Q-Value")
     plt.grid(True, alpha=0.3)
@@ -96,9 +97,84 @@ def plot_switching_trajectory_with_exploration(
 
     plt.xlabel("Episode", fontsize=14)
     plt.ylabel("Switching Point", fontsize=14)
-    plt.title("Switching Point Trajectory with Exploration", fontsize=16, weight="bold")
+    plt.title("Switching Point Trajectory", fontsize=16, weight="bold")
     plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     plt.legend(fontsize=10, loc="upper right")
     plt.tight_layout()
     plt.savefig(out_path, bbox_inches="tight")
+    plt.close()
+
+
+def plot_multi_switching_trajectory(
+    trajectories: Mapping[str, Tuple[Iterable[int], Iterable[Optional[int]]]],
+    out_path: str,
+) -> None:
+    plt.style.use("seaborn-v0_8")
+    plt.figure(figsize=(14, 7), dpi=300)
+    ax = plt.gca()
+
+    for label, (episodes, model_selected) in trajectories.items():
+        ep_list = list(episodes)
+        model_list = list(model_selected)
+        if not ep_list or not model_list:
+            continue
+        plt.plot(ep_list, model_list, linewidth=3.5, alpha=0.9, label=label)
+
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=15))
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True, prune="both", nbins=20))
+
+    plt.xlabel("Episode", fontsize=14)
+    plt.ylabel("Switching Point", fontsize=14)
+    plt.title("Switching Point Trajectory", fontsize=16, weight="bold")
+    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    plt.legend(fontsize=10, loc="upper right")
+    plt.tight_layout()
+    plt.savefig(out_path, bbox_inches="tight")
+    plt.close()
+
+
+def plot_multi_qvalue_vs_state(
+    tables: Mapping[str, Mapping[int, float]],
+    out_path: str,
+) -> None:
+    if not tables:
+        return
+
+    plt.figure(figsize=(12, 6))
+    all_states: List[int] = sorted({sp for table in tables.values() for sp in table.keys()})
+    if not all_states:
+        plt.close()
+        return
+
+    num_series = max(len(tables), 1)
+    total_width = min(0.9, 0.8 + 0.1 * num_series)
+    bar_width = total_width / num_series
+    base_positions = np.arange(len(all_states))
+
+    for idx, (label, q_table) in enumerate(tables.items()):
+        offsets = base_positions + (idx - (num_series - 1) / 2) * bar_width
+        values = [q_table.get(state, 0.0) for state in all_states]
+        bars = plt.bar(
+            offsets,
+            values,
+            width=bar_width * 0.95,
+            alpha=0.7,
+            label=label,
+        )
+        if values:
+            best_state = all_states[int(np.argmax(values))]
+            best_value = max(values)
+            for bar_state, bar in zip(all_states, bars):
+                if bar_state == best_state and best_value == bar.get_height():
+                    bar.set_edgecolor("black")
+                    bar.set_linewidth(1.0)
+
+    plt.title("Q-Value vs Switch Point", fontsize=16, weight="bold")
+    plt.xlabel("Switch Point", fontsize=14)
+    plt.ylabel("Q-Value", fontsize=14)
+    plt.xticks(base_positions, all_states)
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=10, loc="best")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
