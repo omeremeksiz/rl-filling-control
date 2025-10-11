@@ -133,13 +133,6 @@ def main() -> None:
         final_weight = s.final_weight if s.final_weight is not None else 0
         
         post_switch = False
-        total_reward = -len(s.weight_sequence) + calc_reward_q(
-            final_weight,
-            safe_min,
-            safe_max,
-            overflow_penalty_constant,
-            underflow_penalty_constant,
-        )
         seen_pairs: Set[Tuple[int, int]] = set()
         for w in s.weight_sequence:
             if w == -1:
@@ -154,10 +147,16 @@ def main() -> None:
             seen_pairs.add(pair)
             states.append(w)
             actions.append(a)
-            rewards.append(total_reward)
+            rewards.append(-1.0)
 
         if states:
-            rewards[-1] += total_reward
+            rewards[-1] += calc_reward_q(
+            final_weight,
+            safe_min,
+            safe_max,
+            overflow_penalty_constant,
+            underflow_penalty_constant,
+        )
 
         for t in range(len(states)):
             s_t = states[t]
@@ -171,7 +170,7 @@ def main() -> None:
             q_sa = q_table[(s_t, a_t)]
             td_target = r_t + gamma * best_next
             update_counts[(s_t, a_t)] += 1
-            q_table[(s_t, a_t)] = (q_sa + alpha * (td_target - q_sa)) / update_counts[(s_t, a_t)]
+            q_table[(s_t, a_t)] = (q_sa + (1 / update_counts[(s_t, a_t)]) * (td_target - q_sa)) / update_counts[(s_t, a_t)]
             if a_t == 1:
                 positive_updates.add(s_t)
 
@@ -231,7 +230,14 @@ def main() -> None:
         current_sp = next_sp
 
     plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
-    plot_switching_trajectory_with_exploration(traj_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])
+    sp_bounds = (min(available_sps), max(available_sps)) if available_sps else (0, 1)
+    plot_switching_trajectory_with_exploration(
+        traj_ep,
+        model_selected_list,
+        explored_list,
+        paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
+    )
 
     if episode_records:
         excel_output_path = os.path.join(output_dir, "qlearning_qvalue_updates.xlsx")

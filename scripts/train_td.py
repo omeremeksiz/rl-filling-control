@@ -223,7 +223,14 @@ def main() -> None:
         current_sp = next_sp
 
     plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
-    plot_switching_trajectory_with_exploration(traj_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])
+    sp_bounds = (min(available_sps), max(available_sps)) if available_sps else (0, 1)
+    plot_switching_trajectory_with_exploration(
+        traj_ep,
+        model_selected_list,
+        explored_list,
+        paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
+    )
 
     if episode_records:
         excel_output_path = os.path.join(output_dir, "td_qvalue_updates.xlsx")

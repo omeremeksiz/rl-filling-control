@@ -336,8 +336,8 @@ def main() -> None:
                 if action == -1 and state not in positive_updates:
                     continue
                 q_sa = q_table[(state, action)]
-                q_table[(state, action)] = q_sa + alpha * (G - q_sa)
                 update_counts[(state, action)] += 1
+                q_table[(state, action)] = q_sa + (1/update_counts[(state, action)]) * (G - q_sa)
                 if action == 1:
                     positive_updates.add(state)
 
@@ -414,11 +414,14 @@ def main() -> None:
 
     if q_table:
         plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
+
+    sp_bounds = (min(known_sps), max(known_sps)) if known_sps else (0, 1)
     plot_switching_trajectory_with_exploration(
         traj_ep,
         model_selected_list,
         explored_list,
         paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
     )
 
     if episode_records:

@@ -155,11 +155,11 @@ def main() -> None:
         for t in reversed(range(len(trajectory))):
             s_t, a_t, r_t = trajectory[t]
             G = r_t + gamma * G
-            if a_t == -1 and s_t not in positive_updates:
-                continue
+            # if a_t == -1 and s_t not in positive_updates:
+            #     continue
             q_sa = q_table[(s_t, a_t)]
-            q_table[(s_t, a_t)] = q_sa + alpha * (G - q_sa)
             update_counts[(s_t, a_t)] += 1
+            q_table[(s_t, a_t)] = q_sa + (1/update_counts[(s_t, a_t)]) * (G - q_sa)
             if a_t == 1:
                 positive_updates.add(s_t)
 
@@ -217,7 +217,14 @@ def main() -> None:
         current_sp = next_sp
 
     plot_qvalue_vs_state_from_pair_table(q_table, paths['qvalue_vs_state_path'])
-    plot_switching_trajectory_with_exploration(traj_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])
+    sp_bounds = (min(available_sps), max(available_sps))
+    plot_switching_trajectory_with_exploration(
+        traj_ep,
+        model_selected_list,
+        explored_list,
+        paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
+    )
 
     if episode_records:
         excel_output_path = os.path.join(output_dir, "mc_qvalue_updates.xlsx")

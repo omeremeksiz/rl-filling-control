@@ -368,11 +368,13 @@ def main() -> None:
             db_handler.close()
 
     plot_qvalue_vs_state_bandit(q_table, paths['qvalue_vs_state_path'])
+    sp_bounds = (min(available_sps), max(available_sps)) if available_sps else (0, 1)
     plot_switching_trajectory_with_exploration(
         episode_indices,
         model_selected_list,
         explored_list,
         paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
     )
 
     if episode_records:

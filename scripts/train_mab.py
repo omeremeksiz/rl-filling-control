@@ -173,7 +173,14 @@ def main() -> None:
 
     # Legacy plots
     plot_qvalue_vs_state_bandit(q_table, paths['qvalue_vs_state_path'])
-    plot_switching_trajectory_with_exploration(trajectory_ep, model_selected_list, explored_list, paths['switching_point_trajectory_path'])
+    sp_bounds = (min(available_sps), max(available_sps))
+    plot_switching_trajectory_with_exploration(
+        trajectory_ep,
+        model_selected_list,
+        explored_list,
+        paths['switching_point_trajectory_path'],
+        switch_point_bounds=sp_bounds,
+    )
 
     if episode_records:
         excel_output_path = os.path.join(output_dir, "mab_qvalue_updates.xlsx")

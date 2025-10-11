@@ -1,26 +1,31 @@
-"""Compare Multi-Armed Bandit configurations on the filling-control dataset."""
+# scripts/eval_mc.py
 from __future__ import annotations
 
 import copy
 import json
 import os
 import random
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from collections import defaultdict
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Set
 
 import numpy as np
 import yaml
 
-from utils.data_processing import DataProcessor
+from utils.data_processing import (
+    DataProcessor,
+    SWITCH_TOKEN,
+    TERMINATION_TOKEN,
+)
 from utils.logging_utils import (
     setup_legacy_training_logger,
     copy_config_to_output,
 )
 from utils.plotting_utils import (
     plot_multi_switching_trajectory,
-    plot_multi_qvalue_vs_state,
+    plot_multi_qvalue_pair_tables,
 )
 
-CONFIG_PATH = os.path.join("configs", "mab_eval.yaml")
+CONFIG_PATH = os.path.join("configs", "mc_eval.yaml")
 
 
 def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
@@ -28,15 +33,14 @@ def load_config(path: str = CONFIG_PATH) -> Dict[str, Any]:
         return yaml.safe_load(handle)
 
 
-def calc_reward_mab(
-    episode_length: int,
+def calc_reward_mc(
     final_weight: int,
     safe_min: int,
     safe_max: int,
     overflow_penalty_constant: float,
     underflow_penalty_constant: float,
 ) -> float:
-    base_reward = -episode_length
+    base_reward = 0.0
     if safe_min <= final_weight <= safe_max:
         penalty = 0.0
     elif final_weight > safe_max:
@@ -55,7 +59,11 @@ def _pick_next_switch_point(
     if random.random() >= epsilon or not candidates:
         return best_switch_point, None
 
+    if best_switch_point not in candidates:
+        return random.choice(candidates), None
+
     base_idx = candidates.index(best_switch_point)
+
     if not weights:
         return best_switch_point, None
 
@@ -101,6 +109,51 @@ def _select_starting_sp(
     return min(available_sps, key=lambda sp: abs(sp - starting_sp))
 
 
+def ensure_q_entries(
+    q_table: Dict[Tuple[int, int], float],
+    state: int,
+    initial_q: float,
+) -> None:
+    if (state, 1) not in q_table:
+        q_table[(state, 1)] = initial_q
+    if (state, -1) not in q_table:
+        q_table[(state, -1)] = initial_q
+
+
+def build_trajectory(
+    weight_sequence: Iterable[int],
+    final_weight: int,
+    safe_min: int,
+    safe_max: int,
+    overflow_penalty_constant: float,
+    underflow_penalty_constant: float,
+) -> List[Tuple[int, int, float]]:
+    trajectory: List[Tuple[int, int, float]] = []
+    step_cost = -1.0
+    post_switch = False
+    for weight in weight_sequence:
+        if weight == SWITCH_TOKEN:
+            post_switch = True
+            continue
+        if weight == TERMINATION_TOKEN:
+            break
+        action = -1 if post_switch else 1
+        trajectory.append((weight, action, step_cost))
+
+    if trajectory:
+        w_last, a_last, r_last = trajectory[-1]
+        terminal_reward = calc_reward_mc(
+            final_weight,
+            safe_min,
+            safe_max,
+            overflow_penalty_constant,
+            underflow_penalty_constant,
+        )
+        trajectory[-1] = (w_last, a_last, r_last + terminal_reward)
+
+    return trajectory
+
+
 def run_experiment(
     name: str,
     seed: int,
@@ -115,11 +168,15 @@ def run_experiment(
     available_sps = dp.get_available_switch_points()
     if not available_sps:
         raise RuntimeError("No switch points available from dataset.")
-    available_sps = sorted(available_sps)
-    q_table: Dict[int, float] = {sp: 0.0 for sp in available_sps}
 
-    alpha = float(hyperparameters.get("alpha", 0.4))
-    epsilon = float(hyperparameters.get("epsilon_start", 0.5))
+    available_weights = dp.get_all_available_weights()
+    if not available_weights:
+        raise RuntimeError("No weights parsed from dataset.")
+
+    gamma = float(hyperparameters.get("gamma", 0.99))
+    alpha = float(hyperparameters.get("alpha", 0.01))
+    initial_q = float(hyperparameters.get("initial_q", 0.0))
+    epsilon = float(hyperparameters.get("epsilon_start", 0.9))
     epsilon_min = float(hyperparameters.get("epsilon_min", 0.0))
     epsilon_decay = float(hyperparameters.get("epsilon_decay", 1.0))
     under_penalty = float(hyperparameters.get("underflow_penalty_constant", 0.0))
@@ -127,67 +184,103 @@ def run_experiment(
     safe_min = int(hyperparameters.get("safe_min", 74))
     safe_max = int(hyperparameters.get("safe_max", 76))
     starting_sp = int(hyperparameters.get("starting_switch_point", available_sps[0]))
-    step_weights = hyperparameters.get("exploration_step_weights", [])
-    if isinstance(step_weights, list):
-        step_weights = [float(x) for x in step_weights]
+    step_weights_raw = hyperparameters.get("exploration_step_weights", [])
+    if isinstance(step_weights_raw, list):
+        step_weights = [float(x) for x in step_weights_raw]
     else:
         step_weights = []
 
+    q_table: Dict[Tuple[int, int], float] = {}
+    for weight in available_weights:
+        q_table[(weight, 1)] = initial_q
+        q_table[(weight, -1)] = initial_q
+
     current_sp = _select_starting_sp(starting_sp, available_sps)
+    positive_updates: Set[int] = set()
+    update_counts: Dict[Tuple[int, int], int] = defaultdict(int)
 
     episode_nums: List[int] = []
     model_selected_list: List[int] = []
-    q_history: List[Dict[int, float]] = []
+    explored_list: List[Optional[int]] = []
+    q_history: List[Dict[Tuple[int, int], float]] = []
 
-    for ep in range(episodes):
+    for episode in range(episodes):
         experienced_sp = current_sp
-        unused = dp.get_unused_sessions_for_switch_point(experienced_sp)
-        selected_session = random.choice(unused)
-        dp.mark_session_as_used(experienced_sp, selected_session)
+        unused_sessions = dp.get_unused_sessions_for_switch_point(experienced_sp)
+        if not unused_sessions:
+            raise RuntimeError(f"No sessions available for switch point {experienced_sp}.")
+        session = random.choice(unused_sessions)
+        dp.mark_session_as_used(experienced_sp, session)
 
-        episode_length = selected_session.episode_length
-        final_weight = selected_session.final_weight
-        reward = calc_reward_mab(
-            episode_length,
-            final_weight,
+        trajectory = build_trajectory(
+            session.weight_sequence,
+            session.final_weight or 0,
             safe_min,
             safe_max,
             over_penalty,
             under_penalty,
         )
 
-        current_q = q_table[experienced_sp]
-        q_table[experienced_sp] = current_q + alpha * (reward - current_q)
+        G = 0.0
+        for state, action, reward in reversed(trajectory):
+            ensure_q_entries(q_table, state, initial_q)
+            G = reward + gamma * G
+            # if action == -1 and state not in positive_updates:
+            #     continue
+            q_sa = q_table[(state, action)]
+            update_counts[(state, action)] += 1
+            q_table[(state, action)] = q_sa + (1/update_counts[(state, action)]) * (G - q_sa)
+            if action == 1:
+                positive_updates.add(state)
 
-        best_sp = max(q_table, key=q_table.get)
+        state_to_best: Dict[int, Tuple[int, float]] = {}
+        for (state, action), value in q_table.items():
+            best = state_to_best.get(state)
+            if best is None or value > best[1]:
+                state_to_best[state] = (action, value)
 
-        next_sp, _ = _pick_next_switch_point(best_sp, available_sps, epsilon, step_weights)
+        best_sp = experienced_sp
+        for state in sorted(state_to_best):
+            if state_to_best[state][0] == -1 and state in available_sps:
+                best_sp = state
+                break
+
+        next_sp, explored_sp = _pick_next_switch_point(
+            best_sp,
+            available_sps,
+            epsilon,
+            step_weights,
+        )
+
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
-        episode_nums.append(ep + 1)
+        episode_nums.append(episode + 1)
         model_selected_list.append(best_sp)
+        explored_list.append(explored_sp)
         q_history.append(dict(q_table))
-
         current_sp = next_sp
 
         logger.info(
-            "[%s] Episode %d/%d - experienced=%s best=%s epsilon=%.4f",
+            "[%s] Episode %d/%d - experienced=%s best=%s epsilon=%.4f explored=%s",
             name,
-            ep + 1,
+            episode + 1,
             episodes,
             experienced_sp,
             best_sp,
             epsilon,
+            explored_sp,
         )
 
     summary = {
         "name": name,
         "episode_numbers": episode_nums,
         "model_selected": model_selected_list,
+        "explored": explored_list,
         "q_table": q_table,
-        "best_switch_point": max(q_table, key=q_table.get) if q_table else None,
+        "best_switch_point": model_selected_list[-1] if model_selected_list else None,
         "q_history": q_history,
         "seed": seed,
+        "update_counts": dict(update_counts),
     }
     return summary
 
@@ -197,17 +290,17 @@ def main() -> None:
     outputs_dir = cfg.get("outputs_dir", "outputs")
 
     logger, output_dir, _ = setup_legacy_training_logger(base_dir=outputs_dir)
-    copy_config_to_output(CONFIG_PATH, output_dir, destination_name="mab_eval_config.yaml")
+    copy_config_to_output(CONFIG_PATH, output_dir, destination_name="mc_eval_config.yaml")
 
     data_cfg = cfg.get("data", {})
     data_path = data_cfg.get("path", "")
     if not data_path:
-        raise RuntimeError("Dataset path must be provided in mab_eval.yaml under data.path")
+        raise RuntimeError("Dataset path must be provided in mc_eval.yaml under data.path")
 
     defaults = cfg.get("defaults", {})
     experiments_cfg = cfg.get("experiments")
     if not experiments_cfg:
-        raise RuntimeError("No experiments defined in mab_eval.yaml")
+        raise RuntimeError("No experiments defined in mc_eval.yaml")
 
     results: List[Dict[str, Any]] = []
     base_seed = int(cfg.get("seed", 42))
@@ -255,8 +348,8 @@ def main() -> None:
     qvalue_data = {res["name"]: res["q_table"] for res in results}
 
     comparison_paths = {
-        "switching": os.path.join(output_dir, "mab_eval_switching_trajectory.png"),
-        "qvalues": os.path.join(output_dir, "mab_eval_qvalue_comparison.png"),
+        "switching": os.path.join(output_dir, "mc_eval_switching_trajectory.png"),
+        "qvalues": os.path.join(output_dir, "mc_eval_qvalue_comparison.png"),
     }
 
     plot_multi_switching_trajectory(
@@ -264,7 +357,7 @@ def main() -> None:
         comparison_paths["switching"],
         switch_point_bounds=dataset_bounds,
     )
-    plot_multi_qvalue_vs_state(qvalue_data, comparison_paths["qvalues"])
+    plot_multi_qvalue_pair_tables(qvalue_data, comparison_paths["qvalues"])
 
     metrics_payload = {
         "experiments": [
@@ -274,7 +367,14 @@ def main() -> None:
                 "episodes": len(res["episode_numbers"]),
                 "best_switch_point": res["best_switch_point"],
                 "final_q_values": {
-                    str(sp): val for sp, val in sorted(res["q_table"].items())
+                    str(state): {
+                        str(action): value
+                        for action, value in {
+                            1: res["q_table"].get((state, 1), 0.0),
+                            -1: res["q_table"].get((state, -1), 0.0),
+                        }.items()
+                    }
+                    for state in sorted({s for (s, _) in res["q_table"].keys()})
                 },
             }
             for res in results
@@ -282,7 +382,7 @@ def main() -> None:
         "artifacts": comparison_paths,
     }
 
-    metrics_path = os.path.join(output_dir, "mab_eval_metrics.json")
+    metrics_path = os.path.join(output_dir, "mc_eval_metrics.json")
     with open(metrics_path, "w", encoding="utf-8") as handle:
         json.dump(metrics_payload, handle, indent=2)
 
