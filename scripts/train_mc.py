@@ -91,7 +91,7 @@ def main() -> None:
 
     hp = cfg.get("hyperparameters", {})
     gamma = float(hp.get("gamma"))
-    alpha = float(hp.get("alpha"))
+    alpha = float(hp.get("alpha")) # fixed learning rate not used
     initial_q = float(hp.get("initial_q"))
     epsilon = float(hp.get("epsilon_start"))
     epsilon_min = float(hp.get("epsilon_min"))
@@ -155,11 +155,12 @@ def main() -> None:
         for t in reversed(range(len(trajectory))):
             s_t, a_t, r_t = trajectory[t]
             G = r_t + gamma * G
-            # if a_t == -1 and s_t not in positive_updates:
+            # if a_t == -1 and s_t not in positive_updates: # old constraint
             #     continue
             q_sa = q_table[(s_t, a_t)]
             update_counts[(s_t, a_t)] += 1
-            q_table[(s_t, a_t)] = q_sa + (1/update_counts[(s_t, a_t)]) * (G - q_sa)
+            n = update_counts[(s_t, a_t)]
+            q_table[(s_t, a_t)] = q_sa + (1 / n) * (G - q_sa)
             if a_t == 1:
                 positive_updates.add(s_t)
 
@@ -167,9 +168,12 @@ def main() -> None:
         # Find best switch from policy derived from q_table
         state_to_best = {}
         for (w, a), v in q_table.items():
+            if update_counts[(w, 1)] == 0 or update_counts[(w, -1)] == 0: # ensure both actions tried
+                continue
             best = state_to_best.get(w)
             if best is None or v > best[1]:
                 state_to_best[w] = (a, v)
+        # print(state_to_best)
         best_sp = current_sp
         for w in sorted(state_to_best.keys()):
             if state_to_best[w][0] == -1 and w in available_sps:

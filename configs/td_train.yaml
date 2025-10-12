@@ -8,7 +8,7 @@ data:
   path: data/data.xlsx
 
 training:
-  episodes: 500
+  episodes: 2000
 
 hyperparameters:
   gamma: 0.99
@@ -16,7 +16,7 @@ hyperparameters:
   initial_q: -125.0
   epsilon_start: 0.5
   epsilon_min: 0.1
-  epsilon_decay: 1.0
+  epsilon_decay: 0.995
   underflow_penalty_constant: 0.0
   overflow_penalty_constant: 0.0
   safe_min: 74

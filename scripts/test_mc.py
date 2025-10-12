@@ -231,7 +231,7 @@ def main() -> None:
 
     hp = cfg.get("hyperparameters", {})
     gamma = float(hp.get("gamma"))
-    alpha = float(hp.get("alpha"))
+    alpha = float(hp.get("alpha")) # fixed learning rate not used
     initial_q = float(hp.get("initial_q"))
     epsilon = float(hp.get("epsilon_start"))
     epsilon_min = float(hp.get("epsilon_min"))
@@ -333,16 +333,19 @@ def main() -> None:
             for state, action, reward in reversed(trajectory):
                 ensure_q_entries(q_table, state, initial_q)
                 G = reward + gamma * G
-                if action == -1 and state not in positive_updates:
-                    continue
+                # if action == -1 and state not in positive_updates: # old constraint
+                #     continue
                 q_sa = q_table[(state, action)]
                 update_counts[(state, action)] += 1
-                q_table[(state, action)] = q_sa + (1/update_counts[(state, action)]) * (G - q_sa)
+                n = update_counts[(state, action)]
+                q_table[(state, action)] = q_sa + (1 / n) * (G - q_sa)
                 if action == 1:
                     positive_updates.add(state)
 
             state_to_best: Dict[int, Tuple[int, float]] = {}
             for (state, action), value in q_table.items():
+                if update_counts[(state, 1)] == 0 or update_counts[(state, -1)] == 0: # ensure both actions tried
+                    continue
                 best = state_to_best.get(state)
                 if best is None or value > best[1]:
                     state_to_best[state] = (action, value)

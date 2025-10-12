@@ -142,7 +142,7 @@ def main() -> None:
             action = -1 if post_switch else 1
             trajectory.append((w, action, step_reward))
 
-        final_reward = calc_reward_td(
+        final_reward = -len(s.weight_sequence) + calc_reward_td(
             final_weight,
             safe_min=safe_min,
             safe_max=safe_max,
@@ -156,8 +156,8 @@ def main() -> None:
         # TD (SARSA) updates
         for t in range(len(trajectory)):
             s_t, a_t, r_t = trajectory[t]
-            if a_t == -1 and s_t not in positive_updates:
-                continue
+            # if a_t == -1 and s_t not in positive_updates: # old constraint
+            #     continue
             if t + 1 < len(trajectory):
                 s_tp1, a_tp1, _ = trajectory[t + 1]
                 q_next = q_table[(s_tp1, a_tp1)]
@@ -165,14 +165,17 @@ def main() -> None:
             else:
                 td_target = r_t
             q_sa = q_table[(s_t, a_t)]
-            q_table[(s_t, a_t)] = q_sa + alpha * (td_target - q_sa)
             update_counts[(s_t, a_t)] += 1
+            n = update_counts[(s_t, a_t)]
+            q_table[(s_t, a_t)] = q_sa + (1 / n) * (td_target - q_sa)            
             if a_t == 1:
                 positive_updates.add(s_t)
 
         # Derive next switch point: first weight whose best action is -1
         state_to_best = {}
         for (w, a), v in q_table.items():
+            if update_counts[(w, 1)] == 0 or update_counts[(w, -1)] == 0: # ensure both actions tried
+                continue
             best = state_to_best.get(w)
             if best is None or v > best[1]:
                 state_to_best[w] = (a, v)

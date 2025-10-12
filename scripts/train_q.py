@@ -147,16 +147,10 @@ def main() -> None:
             seen_pairs.add(pair)
             states.append(w)
             actions.append(a)
-            rewards.append(-1.0)
+            rewards.append(0.0)
 
         if states:
-            rewards[-1] += calc_reward_q(
-            final_weight,
-            safe_min,
-            safe_max,
-            overflow_penalty_constant,
-            underflow_penalty_constant,
-        )
+            rewards[-1] += (-len(s.weight_sequence) + calc_reward_q(final_weight, safe_min, safe_max, overflow_penalty_constant, underflow_penalty_constant,))
 
         for t in range(len(states)):
             s_t = states[t]
@@ -164,19 +158,31 @@ def main() -> None:
             r_t = rewards[t]
             # if a_t == -1 and s_t not in positive_updates: # for update after first fast action
             #     continue
-            q_fast = q_table.get((s_t, 1), initial_q)
-            q_slow = q_table.get((s_t, -1), initial_q)
-            best_next = max(q_fast, q_slow)
+            if s_t + 1 < max(states):
+                s_next = s_t + 1
+                q_fast_next = q_table.get((s_next, 1), initial_q)
+                q_slow_next = q_table.get((s_next, -1), initial_q)
+                if q_fast_next != 0 and q_slow_next != 0:
+                    best_next = max(q_fast_next, q_slow_next)
+                elif q_fast_next != 0 and q_slow_next == 0:
+                    best_next = q_fast_next
+                elif q_fast_next == 0 and q_slow_next != 0:
+                    best_next = q_slow_next
+                else:
+                    best_next = 0.0
+            else:
+                best_next = 0.0  # terminal step has no future return
             q_sa = q_table[(s_t, a_t)]
             td_target = r_t + gamma * best_next
             update_counts[(s_t, a_t)] += 1
-            q_table[(s_t, a_t)] = (q_sa + (1 / update_counts[(s_t, a_t)]) * (td_target - q_sa)) / update_counts[(s_t, a_t)]
+            n = update_counts[(s_t, a_t)]
+            q_table[(s_t, a_t)] = (q_sa + (1 / n) * (td_target - q_sa))
             if a_t == 1:
                 positive_updates.add(s_t)
 
         state_to_best = {}
         for (w, a), v in q_table.items():
-            if update_counts.get((w, 1), 0) < 1 or update_counts.get((w, -1), 0) < 1:
+            if update_counts[(w, 1)] == 0 or update_counts[(w, -1)] == 0: # ensure both actions tried
                 continue
             best = state_to_best.get(w)
             if best is None or v > best[1]:
