@@ -227,7 +227,6 @@ def main() -> None:
 
     test_cfg = cfg.get("testing", {})
     episodes = int(test_cfg.get("episodes", 1))
-    max_steps = int(test_cfg.get("max_steps_per_episode", 1))
 
     hp = cfg.get("hyperparameters", {})
     gamma = float(hp.get("gamma"))
@@ -286,14 +285,13 @@ def main() -> None:
 
             raw_payloads: List[str] = []
             weight_trace: List[int] = []
-
-            for _ in range(max_steps):
-                payload = tcp.receive_data()
-                if payload:
-                    raw_payloads.append(payload)
-                values = parse_live_payload_to_floats(payload) if payload else []
-                if values:
-                    weight_trace.extend(int(round(v)) for v in values)
+            
+            payload = tcp.receive_data()
+            if payload:
+                raw_payloads.append(payload)
+            values = parse_live_payload_to_floats(payload) if payload else []
+            if values:
+                weight_trace.extend(int(round(v)) for v in values)
 
             raw_combined = "".join(raw_payloads)
             session = None

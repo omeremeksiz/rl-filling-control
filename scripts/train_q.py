@@ -133,7 +133,7 @@ def main() -> None:
         final_weight = s.final_weight if s.final_weight is not None else 0
         
         post_switch = False
-        seen_pairs: Set[Tuple[int, int]] = set()
+        trajectory: List[Tuple[int,int,float]] = []
         for w in s.weight_sequence:
             if w == -1:
                 post_switch = True
@@ -142,9 +142,9 @@ def main() -> None:
                 break
             a = -1 if post_switch else 1
             pair = (w, a)
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
+            # if pair in trajectory:
+            #     continue
+            trajectory.append(pair)
             states.append(w)
             actions.append(a)
             rewards.append(0.0)
@@ -158,20 +158,16 @@ def main() -> None:
             r_t = rewards[t]
             # if a_t == -1 and s_t not in positive_updates: # for update after first fast action
             #     continue
-            if s_t + 1 < max(states):
-                s_next = s_t + 1
-                q_fast_next = q_table.get((s_next, 1), initial_q)
-                q_slow_next = q_table.get((s_next, -1), initial_q)
-                if q_fast_next != 0 and q_slow_next != 0:
-                    best_next = max(q_fast_next, q_slow_next)
-                elif q_fast_next != 0 and q_slow_next == 0:
-                    best_next = q_fast_next
-                elif q_fast_next == 0 and q_slow_next != 0:
-                    best_next = q_slow_next
+            if t < len(states) - 1:
+                s_next = states[t + 1]
+                if update_counts[(s_next, 1)] == 0 and update_counts[(s_next, -1)] != 0:
+                    best_next = q_table[(s_next, -1)]
+                elif update_counts[(s_next, -1)] == 0 and update_counts[(s_next, 1)] != 0:
+                    best_next = q_table[(s_next, 1)]
                 else:
-                    best_next = 0.0
+                    best_next = max(q_table[(s_next, 1)], q_table[(s_next, -1)])
             else:
-                best_next = 0.0  # terminal step has no future return
+                best_next = 0.0
             q_sa = q_table[(s_t, a_t)]
             td_target = r_t + gamma * best_next
             update_counts[(s_t, a_t)] += 1
