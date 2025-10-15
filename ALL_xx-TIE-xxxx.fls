@@ -1,0 +1,6 @@
+PWD /Users/omeremeksiz/Desktop/filling-control/rl-filling-control
+INPUT /usr/local/texlive/2025basic/texmf.cnf
+INPUT /usr/local/texlive/2025basic/texmf-dist/web2c/texmf.cnf
+INPUT /usr/local/texlive/2025basic/texmf-var/web2c/pdftex/pdflatex.fmt
+INPUT paper/ALL_xx-TIE-xxxx.tex
+OUTPUT ALL_xx-TIE-xxxx.log
