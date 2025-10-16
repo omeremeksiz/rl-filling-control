@@ -256,6 +256,7 @@ def main() -> None:
         res["name"]: (res["episode_numbers"], res["model_selected"]) for res in results
     }
     qvalue_data = {res["name"]: res["q_table"] for res in results}
+    best_sp_map = {res["name"]: res.get("best_switch_point") for res in results}
 
     comparison_paths = {
         "switching": os.path.join(output_dir, "mab_eval_switching_trajectory.png"),
@@ -267,7 +268,11 @@ def main() -> None:
         comparison_paths["switching"],
         switch_point_bounds=dataset_bounds,
     )
-    plot_multi_qvalue_vs_state(qvalue_data, comparison_paths["qvalues"])
+    plot_multi_qvalue_vs_state(
+        qvalue_data,
+        comparison_paths["qvalues"],
+        best_switch_points=best_sp_map,
+    )
 
     metrics_payload = {
         "experiments": [

@@ -7,7 +7,7 @@ data:
 
 defaults:
   training:
-    episodes: 2000
+    episodes: 500
   hyperparameters:
     gamma: 0.99
     alpha: 0.01
@@ -29,12 +29,8 @@ experiments:
       overflow_penalty_constant: 0.0
   - name: low_penalty
     hyperparameters:
-      underflow_penalty_constant: -20.0
-      overflow_penalty_constant: -20.0
-  - name: medium_penalty
-    hyperparameters:
-      underflow_penalty_constant: -150.0
-      overflow_penalty_constant: -150.0
+      underflow_penalty_constant: -90.0
+      overflow_penalty_constant: -90.0
   - name: high_penalty
     hyperparameters:
       underflow_penalty_constant: -3000.0

@@ -14,7 +14,7 @@ def _ensure_dir(path: str) -> None:
         os.makedirs(path, exist_ok=True)
 
 
-def setup_legacy_training_logger(base_dir: str = "output") -> Tuple[logging.Logger, str, str]:
+def setup_legacy_training_logger(base_dir: str = "outputs") -> Tuple[logging.Logger, str, str]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_id = str(uuid.uuid4())[:6]
     training_id = f"{timestamp}_{unique_id}"
