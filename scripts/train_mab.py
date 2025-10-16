@@ -126,8 +126,9 @@ def main() -> None:
                                  overflow_penalty_constant, underflow_penalty_constant)
 
         # Bandit update: Q(sp) <- Q(sp) + alpha * (reward - Q(sp))
-        q_table[experienced_sp] = q_table[experienced_sp] + alpha * (reward - q_table[experienced_sp])
         update_counts[experienced_sp] += 1
+        n = update_counts[experienced_sp]
+        q_table[experienced_sp] = q_table[experienced_sp] + (1 / n) * (reward - q_table[experienced_sp])
 
         best_sp = max(q_table, key=q_table.get)
         if safe_min <= final_weight <= safe_max:

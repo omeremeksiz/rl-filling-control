@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import random
+from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import numpy as np
@@ -137,6 +138,7 @@ def run_experiment(
 
     episode_nums: List[int] = []
     model_selected_list: List[int] = []
+    update_counts = defaultdict(int)
     q_history: List[Dict[int, float]] = []
 
     for ep in range(episodes):
@@ -156,8 +158,9 @@ def run_experiment(
             under_penalty,
         )
 
-        current_q = q_table[experienced_sp]
-        q_table[experienced_sp] = current_q + alpha * (reward - current_q)
+        update_counts[experienced_sp] += 1
+        n = update_counts[experienced_sp]
+        q_table[experienced_sp] = q_table[experienced_sp] + (1 / n) * (reward - q_table[experienced_sp])
 
         best_sp = max(q_table, key=q_table.get)
 

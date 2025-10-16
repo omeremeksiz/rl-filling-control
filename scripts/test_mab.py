@@ -307,9 +307,15 @@ def main() -> None:
             )
             episode_rewards.append(reward)
 
-            q_table[current_sp] = q_table[current_sp] + alpha * (reward - q_table[current_sp])
+            update_counts[experienced_sp] += 1
+            n = update_counts[experienced_sp]
+            q_table[current_sp] = q_table[current_sp] + (1 / n) * (reward - q_table[current_sp])
 
-            best_sp = max(q_table, key=q_table.get)
+            eligible_sps = [sp for sp, count in update_counts.items() if count > 0]
+            if eligible_sps:
+                best_sp = max(eligible_sps, key=q_table.get)
+            else:
+                best_sp = max(q_table, key=q_table.get)
             termination = (
                 "Normal" if safe_min <= final_weight <= safe_max
                 else ("Underflow" if final_weight < safe_min else "Overflow")
@@ -344,8 +350,6 @@ def main() -> None:
                 q_values_snapshot=q_table.copy(),
                 meta=meta,
             )
-
-            update_counts[experienced_sp] += 1
 
             episode_records.append(
                 {
