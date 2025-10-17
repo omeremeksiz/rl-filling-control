@@ -9,7 +9,7 @@ defaults:
   training:
     episodes: 500
   hyperparameters:
-    alpha: 0.4
+    alpha: 0.01
     epsilon_start: 0.5
     epsilon_min: 0.1
     epsilon_decay: 0.995
