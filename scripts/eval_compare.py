@@ -12,6 +12,7 @@ import logging
 
 from utils.logging_utils import copy_config_to_output
 from utils.plotting_utils import (
+    plot_switching_trajectory_with_exploration,
     plot_multi_switching_trajectory,
     plot_multi_qvalue_vs_state,
     plot_multi_qvalue_pair_tables,
@@ -220,10 +221,16 @@ def main() -> None:
         mab_switch_points[config_slug] = res.get("best_switch_point")
 
         trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.png")
-        plot_multi_switching_trajectory(
-            {label: (res.get("episode_numbers", []), res.get("model_selected", []))},
+        display_label = label.replace("_", " ")
+        plot_switching_trajectory_with_exploration(
+            res.get("episode_numbers", []),
+            res.get("model_selected", []),
+            res.get("explored"),
             trajectory_path,
             switch_point_bounds=combined_bounds,
+            line_color="#E66100",
+            trajectory_label="",
+            exploration_color="#A5D6A7",
         )
         individual_switching_paths[file_stub] = trajectory_path
 
@@ -257,10 +264,16 @@ def main() -> None:
         mc_switch_points[config_slug] = res.get("best_switch_point")
 
         trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.png")
-        plot_multi_switching_trajectory(
-            {label: (res.get("episode_numbers", []), res.get("model_selected", []))},
+        display_label = label.replace("_", " ")
+        plot_switching_trajectory_with_exploration(
+            res.get("episode_numbers", []),
+            res.get("model_selected", []),
+            res.get("explored"),
             trajectory_path,
             switch_point_bounds=combined_bounds,
+            line_color="#1B4F72",
+            trajectory_label="",
+            exploration_color="#A5D6A7",
         )
         individual_switching_paths[file_stub] = trajectory_path
 
@@ -289,6 +302,7 @@ def main() -> None:
             "best_switching_point": res.get("best_switch_point"),
             "q_table": {str(k): float(v) for k, v in res.get("q_table", {}).items()},
             "trajectory": res.get("model_selected", []),
+            "explored": res.get("explored", []),
         }
 
     def _serialise_mc(res: Dict[str, Any]) -> Dict[str, Any]:
@@ -311,6 +325,7 @@ def main() -> None:
             "episodes": len(res.get("episode_numbers", [])),
             "best_switching_point": res.get("best_switch_point"),
             "trajectory": res.get("model_selected", []),
+            "explored": res.get("explored", []),
             "q_table": serialised_q,
             "q_history": q_history_serialised,
             "update_counts": update_counts,

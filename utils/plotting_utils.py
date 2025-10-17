@@ -5,6 +5,7 @@ from typing import Dict, Iterable, Mapping, Tuple, List, Optional, Sequence
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from matplotlib.lines import Line2D
 import numpy as np
 
 FIG_SIZE_STANDARD = (14, 7)
@@ -87,10 +88,12 @@ def plot_qvalue_vs_state_from_pair_table(
                     best_val = value
                     best_switch_point = state
 
+    sp_color = "#0B6E4F"
+
     if best_switch_point is not None and best_switch_point in states:
         idx = states.index(best_switch_point)
         x_coord = positions[idx]
-        ax.axvline(x_coord, color="goldenrod", linestyle="--", linewidth=2.3, alpha=0.9)
+        ax.axvline(x_coord, color=sp_color, linestyle="--", linewidth=3.4, alpha=0.95)
         y_span = y_max - y_min if y_max > y_min else max(abs(y_max), 1.0)
         y_offset = 0.06 * y_span
         text_y = y_min + y_offset
@@ -101,7 +104,7 @@ def plot_qvalue_vs_state_from_pair_table(
             ha="center",
             va="bottom",
             fontsize=13,
-            color="goldenrod",
+            color=sp_color,
             fontweight="bold",
         )
 
@@ -188,24 +191,35 @@ def plot_qvalue_vs_state_bandit(q_table: Mapping[int, float], out_path: str) -> 
 def plot_switching_trajectory_with_exploration(
     episode_nums: Iterable[int],
     model_selected: Iterable[Optional[int]],
-    explored: Iterable[Optional[int]],
-    out_path: str,
+    explored: Optional[Iterable[Optional[int]]] = None,
+    out_path: str = "",
     switch_point_bounds: Optional[Tuple[int, int]] = None,
+    *,
+    line_color: str = "#1B4F72",
+    trajectory_label: str = "Model Selected",
+    exploration_color: str = "#36D13C",
 ) -> None:
     ep_list = list(episode_nums)
     model_list = list(model_selected)
-    explored_list = list(explored)
+    explored_list = list(explored) if explored is not None else [None] * len(model_list)
 
     fig, ax = plt.subplots(figsize=FIG_SIZE_STANDARD, dpi=DPI_EXPORT)
     ax.set_facecolor("white")
-    ax.plot(ep_list, model_list, color="steelblue", linewidth=3.5, alpha=0.95, label="Model Selected")
+    ax.plot(
+        ep_list,
+        model_list,
+        color=line_color,
+        linewidth=3.8,
+        alpha=0.95,
+        label=trajectory_label,
+        zorder=2,
+    )
 
+    show_explored = False
     for ep, msel, ex in zip(ep_list, model_list, explored_list):
         if ex is not None and ex != msel:
-            ax.plot([ep, ep], [msel, ex], color="orange", linewidth=1.2, alpha=0.75)
-
-    if any(ex is not None for ex in explored_list):
-        ax.plot([], [], color="orange", linewidth=1.5, label="Explored")
+            show_explored = True
+            ax.plot([ep, ep], [msel, ex], color=exploration_color, linewidth=2.4, alpha=0.9, zorder=3)
 
     x_min = min(ep_list) if ep_list else 0
     x_max = max(ep_list) if ep_list else 1
@@ -215,8 +229,8 @@ def plot_switching_trajectory_with_exploration(
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=15))
     ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True, prune="both", nbins=20))
 
-    ax.set_ylim(44, 76)
-    ax.set_yticks(np.arange(44, 77, 4))
+    ax.set_ylim(42, 76)
+    ax.set_yticks(np.arange(42, 77, 2))
 
     ax.set_xlabel("Episode", fontsize=16, fontweight="bold")
     ax.set_ylabel("Switching Point", fontsize=16, fontweight="bold")
@@ -224,11 +238,12 @@ def plot_switching_trajectory_with_exploration(
     for label in ax.get_xticklabels() + ax.get_yticklabels():
         label.set_fontweight("bold")
     ax.grid(True, linestyle="--", linewidth=0.7, alpha=0.6)
-    legend = ax.legend(fontsize=14, loc="upper right")
-    for text in legend.get_texts():
-        text.set_fontweight("bold")
+
+    # Legends are omitted for single trajectories per request
+
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    if out_path:
+        fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -289,7 +304,7 @@ def plot_multi_switching_trajectory(
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=15))
     ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True, prune="both", nbins=20))
 
-    ax.set_ylim(44, 76)
+    ax.set_ylim(42, 76)
     ax.set_yticks(np.arange(44, 77, 4))
 
     ax.set_xlabel("Episode", fontsize=16, fontweight="bold")
@@ -385,7 +400,7 @@ def plot_multi_qvalue_vs_state(
             best_idx = all_states.index(best_state)
             if 0 <= best_idx < len(bars):
                 bars[best_idx].set_linewidth(1.4)
-                bars[best_idx].set_edgecolor("goldenrod")
+                bars[best_idx].set_edgecolor("#0B6E4F")
             best_annotations.setdefault(best_state, base_positions[best_idx])
 
     if finite_values:
@@ -433,8 +448,9 @@ def plot_multi_qvalue_vs_state(
     ax.set_ylabel("Q-Value", fontsize=16, fontweight="bold")
     ax.grid(True, linestyle="--", linewidth=0.7, alpha=0.6)
 
+    sp_color = "#0B6E4F"
     for state, x_coord in best_annotations.items():
-        ax.axvline(x_coord, color="goldenrod", linestyle="--", linewidth=2.3, alpha=0.9)
+        ax.axvline(x_coord, color=sp_color, linestyle="--", linewidth=3.4, alpha=0.95)
         y_span = y_max - y_min if y_max > y_min else max(abs(y_max), 1.0)
         y_offset = 0.06 * y_span
         text_y = y_min + y_offset
@@ -445,7 +461,7 @@ def plot_multi_qvalue_vs_state(
             ha="center",
             va="bottom",
             fontsize=13,
-            color="goldenrod",
+            color=sp_color,
             fontweight="bold",
         )
 

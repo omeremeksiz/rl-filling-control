@@ -140,6 +140,7 @@ def run_experiment(
     model_selected_list: List[int] = []
     update_counts = defaultdict(int)
     q_history: List[Dict[int, float]] = []
+    explored_choices: List[Optional[int]] = []
 
     for ep in range(episodes):
         experienced_sp = current_sp
@@ -164,22 +165,24 @@ def run_experiment(
 
         best_sp = max(q_table, key=q_table.get)
 
-        next_sp, _ = _pick_next_switch_point(best_sp, available_sps, epsilon, step_weights)
+        next_sp, explored_choice = _pick_next_switch_point(best_sp, available_sps, epsilon, step_weights)
         epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
         episode_nums.append(ep + 1)
         model_selected_list.append(best_sp)
         q_history.append(dict(q_table))
+        explored_choices.append(explored_choice)
 
         current_sp = next_sp
 
         logger.info(
-            "[%s] Episode %d/%d - experienced=%s best=%s epsilon=%.4f",
+            "[%s] Episode %d/%d - experienced=%s best=%s explored=%s epsilon=%.4f",
             name,
             ep + 1,
             episodes,
             experienced_sp,
             best_sp,
+            explored_choice,
             epsilon,
         )
 
@@ -187,6 +190,7 @@ def run_experiment(
         "name": name,
         "episode_numbers": episode_nums,
         "model_selected": model_selected_list,
+        "explored": explored_choices,
         "q_table": q_table,
         "best_switch_point": max(q_table, key=q_table.get) if q_table else None,
         "q_history": q_history,

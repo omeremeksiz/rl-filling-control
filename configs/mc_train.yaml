@@ -8,7 +8,7 @@ data:
   path: data/data.xlsx
 
 training:
-  episodes: 2000
+  episodes: 500
 
 hyperparameters:
   gamma: 0.99
