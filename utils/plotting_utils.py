@@ -6,10 +6,17 @@ from typing import Dict, Iterable, Mapping, Tuple, List, Optional, Sequence
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib.lines import Line2D
+from matplotlib.figure import Figure
 import numpy as np
 
 FIG_SIZE_STANDARD = (14, 7)
 DPI_EXPORT = 400
+
+
+def _save_figure(fig: Figure, out_path: Optional[str], *, dpi: int = DPI_EXPORT) -> None:
+    if not out_path:
+        return
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
 
 
 def plot_qvalue_vs_state_from_pair_table(
@@ -35,7 +42,7 @@ def plot_qvalue_vs_state_from_pair_table(
         ax.axis("off")
         if owns_fig:
             fig.tight_layout()
-            fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+            _save_figure(fig, out_path)
             plt.close(fig)
         return
     if y_limits is None:
@@ -163,8 +170,7 @@ def plot_qvalue_vs_state_from_pair_table(
 
     if owns_fig:
         fig.tight_layout()
-        if out_path:
-            fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+        _save_figure(fig, out_path)
         plt.close(fig)
 
 
@@ -184,7 +190,7 @@ def plot_qvalue_vs_state_bandit(q_table: Mapping[int, float], out_path: str) -> 
     ax.set_ylabel("Q-Value")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    _save_figure(fig, out_path)
     plt.close(fig)
 
 
@@ -243,7 +249,7 @@ def plot_switching_trajectory_with_exploration(
 
     fig.tight_layout()
     if out_path:
-        fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+        _save_figure(fig, out_path)
     plt.close(fig)
 
 
@@ -330,7 +336,7 @@ def plot_multi_switching_trajectory(
         for text in legend.get_texts():
             text.set_fontweight("bold")
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    _save_figure(fig, out_path)
     plt.close(fig)
 
 
@@ -466,7 +472,7 @@ def plot_multi_qvalue_vs_state(
         )
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    _save_figure(fig, out_path)
     plt.close(fig)
 
 
@@ -575,7 +581,7 @@ def plot_multi_qvalue_pair_tables(
             ax.tick_params(axis="y", labelleft=False)
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    _save_figure(fig, out_path)
     plt.close(fig)
 
 
@@ -715,5 +721,5 @@ def plot_compare_method_switch_points(
             text.set_fontweight("bold")
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=DPI_EXPORT, bbox_inches="tight")
+    _save_figure(fig, out_path)
     plt.close(fig)

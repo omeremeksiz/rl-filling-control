@@ -190,8 +190,8 @@ def main() -> None:
     mc_switch_points: Dict[str, Optional[int]] = {}
 
     comparison_paths = {
-        "switching": os.path.join(output_dir, "compare_switching_trajectory.png"),
-        "best_switch_points": os.path.join(output_dir, "compare_best_switch_points.png"),
+        "switching": os.path.join(output_dir, "compare_switching_trajectory.pdf"),
+        "best_switch_points": os.path.join(output_dir, "compare_best_switch_points.pdf"),
     }
 
     plot_multi_switching_trajectory(
@@ -220,7 +220,7 @@ def main() -> None:
         config_display.setdefault(config_slug, config_label)
         mab_switch_points[config_slug] = res.get("best_switch_point")
 
-        trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.png")
+        trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.pdf")
         display_label = label.replace("_", " ")
         plot_switching_trajectory_with_exploration(
             res.get("episode_numbers", []),
@@ -234,7 +234,7 @@ def main() -> None:
         )
         individual_switching_paths[file_stub] = trajectory_path
 
-        qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.png")
+        qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.pdf")
         plot_multi_qvalue_vs_state(
             {label: res.get("q_table", {})},
             qvalues_path,
@@ -263,7 +263,7 @@ def main() -> None:
         config_display.setdefault(config_slug, config_label)
         mc_switch_points[config_slug] = res.get("best_switch_point")
 
-        trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.png")
+        trajectory_path = os.path.join(sp_trajectory_dir, f"{file_stub}.pdf")
         display_label = label.replace("_", " ")
         plot_switching_trajectory_with_exploration(
             res.get("episode_numbers", []),
@@ -277,7 +277,7 @@ def main() -> None:
         )
         individual_switching_paths[file_stub] = trajectory_path
 
-        qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.png")
+        qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.pdf")
         plot_multi_qvalue_pair_tables(
             {label: res.get("q_table", {})},
             qvalues_path,

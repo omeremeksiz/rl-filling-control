@@ -42,8 +42,8 @@ def setup_legacy_training_logger(base_dir: str = "outputs") -> Tuple[logging.Log
 
 def get_legacy_output_paths(output_dir: str) -> Dict[str, str]:
     return {
-        'qvalue_vs_state_path': os.path.join(output_dir, "qvalue_vs_state.png"),
-        'switching_point_trajectory_path': os.path.join(output_dir, "switching_point_trajectory.png"),
+        'qvalue_vs_state_path': os.path.join(output_dir, "qvalue_vs_state.pdf"),
+        'switching_point_trajectory_path': os.path.join(output_dir, "switching_point_trajectory.pdf"),
         'log_file_path': os.path.join(output_dir, "training_process.log"),
     }
 
@@ -52,5 +52,4 @@ def copy_config_to_output(config_path: str, output_dir: str, destination_name: s
     dest_path = os.path.join(output_dir, destination_name)
     shutil.copy2(config_path, dest_path)
     return dest_path
-
 

@@ -352,8 +352,8 @@ def main() -> None:
     best_sp_map = {res["name"]: res.get("best_switch_point") for res in results}
 
     comparison_paths = {
-        "switching": os.path.join(output_dir, "mc_eval_switching_trajectory.png"),
-        "qvalues": os.path.join(output_dir, "mc_eval_qvalue_comparison.png"),
+        "switching": os.path.join(output_dir, "mc_eval_switching_trajectory.pdf"),
+        "qvalues": os.path.join(output_dir, "mc_eval_qvalue_comparison.pdf"),
     }
 
     plot_multi_switching_trajectory(
