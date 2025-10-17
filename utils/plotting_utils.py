@@ -9,7 +9,7 @@ from matplotlib.lines import Line2D
 import numpy as np
 
 FIG_SIZE_STANDARD = (14, 7)
-DPI_EXPORT = 600
+DPI_EXPORT = 400
 
 
 def plot_qvalue_vs_state_from_pair_table(
