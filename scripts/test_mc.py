@@ -304,14 +304,20 @@ def main() -> None:
                 )
 
             if session and meta and core_sequence:
-                weight_sequence = [w for w in session.weight_sequence[:-1] if w not in (-1, 300)]
+                weight_sequence = session.weight_sequence.copy()
+                if weight_sequence and weight_sequence[-1] == 300:
+                    weight_sequence = weight_sequence[:-1]
                 final_weight = meta.final_weight if meta.final_weight is not None else (session.final_weight or 0)
             else:
                 weight_sequence = weight_trace.copy()
+                if weight_sequence and weight_sequence[-1] == 300:
+                    weight_sequence = weight_sequence[:-1]
                 final_weight = int(np.mean(weight_trace)) if weight_trace else 0
                 meta = meta if meta else None
 
             for state in weight_sequence:
+                if state in (-1, 300):
+                    continue
                 ensure_q_entries(q_table, state, initial_q)
                 if state not in known_sps:
                     known_sps.append(state)
