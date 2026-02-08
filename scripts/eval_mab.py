@@ -1,4 +1,4 @@
-"""Compare Multi-Armed Bandit configurations on the filling-control dataset."""
+# scripts/eval_mab.py
 from __future__ import annotations
 
 import copy
@@ -17,8 +17,8 @@ from utils.logging_utils import (
     copy_config_to_output,
 )
 from utils.plotting_utils import (
-    plot_multi_switching_trajectory,
     plot_multi_qvalue_vs_state,
+    plot_summary_switching_trajectory,
 )
 
 CONFIG_PATH = os.path.join("configs", "mab_eval.yaml")
@@ -102,6 +102,43 @@ def _select_starting_sp(
     return min(available_sps, key=lambda sp: abs(sp - starting_sp))
 
 
+def _resolve_seed_list(value: Any, fallback: Iterable[int]) -> List[int]:
+    if value is None:
+        return [int(seed) for seed in fallback]
+    if isinstance(value, (list, tuple, set)):
+        seeds = [int(seed) for seed in value]
+    else:
+        seeds = [int(value)]
+    if not seeds:
+        return [int(seed) for seed in fallback]
+    return seeds
+
+
+def _resolve_plot_format(value: Any, default: str = "pdf") -> str:
+    if value is None:
+        return default
+    fmt = str(value).strip().lower().lstrip(".")
+    if fmt not in {"pdf", "png"}:
+        return default
+    return fmt
+
+
+def _resolve_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "1", "on"}:
+            return True
+        if lowered in {"false", "no", "0", "off"}:
+            return False
+    return default
+
+
 def run_experiment(
     name: str,
     seed: int,
@@ -161,7 +198,8 @@ def run_experiment(
 
         update_counts[experienced_sp] += 1
         n = update_counts[experienced_sp]
-        q_table[experienced_sp] = q_table[experienced_sp] + (1 / n) * (reward - q_table[experienced_sp])
+        q_table[experienced_sp] = q_table[experienced_sp] + (1 / n) * (reward - q_table[experienced_sp]) # adaptive learning rate
+        # q_table[experienced_sp] = q_table[experienced_sp] + (alpha) * (reward - q_table[experienced_sp])
 
         best_sp = max(q_table, key=q_table.get)
 
@@ -218,7 +256,9 @@ def main() -> None:
 
     results: List[Dict[str, Any]] = []
     base_seed = int(cfg.get("seed", 42))
+    base_seeds = _resolve_seed_list(cfg.get("seeds"), [base_seed])
     dataset_bounds: Optional[Tuple[int, int]] = None
+    results_by_name: Dict[str, List[Dict[str, Any]]] = {}
 
     for idx, experiment in enumerate(experiments_cfg, start=1):
         name = experiment.get("name", f"experiment_{idx}")
@@ -228,54 +268,119 @@ def main() -> None:
         episodes = int(train_cfg.get("episodes", 0))
         if episodes <= 0:
             raise RuntimeError(f"Experiment '{name}' must specify training.episodes > 0")
-        seed = int(merged_cfg.get("seed", base_seed))
+        seed_override = merged_cfg.get("seeds")
+        if seed_override is None and "seed" in merged_cfg:
+            seed_override = merged_cfg.get("seed")
+        seeds = _resolve_seed_list(seed_override, base_seeds)
 
-        dp = DataProcessor()
-        dp.load_excel(data_path)
+        for seed in seeds:
+            dp = DataProcessor()
+            dp.load_excel(data_path)
 
-        available_sps = dp.get_available_switch_points()
-        if not available_sps:
-            raise RuntimeError("No switch points available from dataset.")
-        if dataset_bounds is None:
-            dataset_bounds = (min(available_sps), max(available_sps))
+            available_sps = dp.get_available_switch_points()
+            if not available_sps:
+                raise RuntimeError("No switch points available from dataset.")
+            if dataset_bounds is None:
+                dataset_bounds = (min(available_sps), max(available_sps))
 
-        logger.info("=== Running experiment: %s (seed=%d) ===", name, seed)
-        summary = run_experiment(
-            name=name,
-            seed=seed,
-            episodes=episodes,
-            dp=dp,
-            hyperparameters=hyperparameters,
-            logger=logger,
+            logger.info("=== Running experiment: %s (seed=%d) ===", name, seed)
+            summary = run_experiment(
+                name=name,
+                seed=seed,
+                episodes=episodes,
+                dp=dp,
+                hyperparameters=hyperparameters,
+                logger=logger,
+            )
+            results.append(summary)
+            results_by_name.setdefault(name, []).append(summary)
+            logger.info(
+                "=== Completed experiment: %s | best_switch_point=%s ===",
+                name,
+                summary["best_switch_point"],
+            )
+            logger.info("")
+
+    trajectory_data: Dict[str, Tuple[List[int], List[float]]] = {}
+    trajectory_bands: Dict[str, Tuple[List[float], List[float]]] = {}
+    exploration_data: Dict[str, List[Optional[float]]] = {}
+    for name, summaries in results_by_name.items():
+        if not summaries:
+            continue
+        model_lists = [summary.get("model_selected", []) for summary in summaries]
+        if not model_lists:
+            continue
+        min_len = min(len(items) for items in model_lists)
+        if min_len <= 0:
+            continue
+        episode_nums = list(summaries[0].get("episode_numbers", []))[:min_len]
+        stacked = np.array([items[:min_len] for items in model_lists], dtype=float)
+        trajectory_data[name] = (episode_nums, np.median(stacked, axis=0).tolist())
+        trajectory_bands[name] = (
+            np.min(stacked, axis=0).tolist(),
+            np.max(stacked, axis=0).tolist(),
         )
-        results.append(summary)
-        logger.info(
-            "=== Completed experiment: %s | best_switch_point=%s ===",
-            name,
-            summary["best_switch_point"],
-        )
-        logger.info("")
+        explored_lists = [summary.get("explored", []) for summary in summaries]
+        explored_vals: List[Optional[float]] = []
+        for idx in range(min_len):
+            candidates = [
+                float(explored[idx])
+                for explored in explored_lists
+                if idx < len(explored) and explored[idx] is not None
+            ]
+            if candidates:
+                explored_vals.append(float(np.median(candidates)))
+            else:
+                explored_vals.append(None)
+        exploration_data[name] = explored_vals
 
-    trajectory_data = {
-        res["name"]: (res["episode_numbers"], res["model_selected"]) for res in results
-    }
-    qvalue_data = {res["name"]: res["q_table"] for res in results}
-    best_sp_map = {res["name"]: res.get("best_switch_point") for res in results}
+    qvalue_data = {}
+    best_sp_map = {}
+    for name, summaries in results_by_name.items():
+        if not summaries:
+            continue
+        label = f"MAB - {name}"
+        q_tables = [summary.get("q_table", {}) for summary in summaries]
+        all_states = sorted({state for table in q_tables for state in table.keys()})
+        median_table: Dict[int, float] = {}
+        for state in all_states:
+            values = [table.get(state) for table in q_tables if state in table]
+            values = [value for value in values if value is not None and np.isfinite(value)]
+            if values:
+                median_table[state] = float(np.median(values))
+        qvalue_data[label] = median_table
+        best_values = [summary.get("best_switch_point") for summary in summaries]
+        best_values = [value for value in best_values if value is not None]
+        best_sp_map[label] = int(round(float(np.median(best_values)))) if best_values else None
+
+    plot_format = _resolve_plot_format(cfg.get("plot_format"))
 
     comparison_paths = {
-        "switching": os.path.join(output_dir, "mab_eval_switching_trajectory.pdf"),
-        "qvalues": os.path.join(output_dir, "mab_eval_qvalue_comparison.pdf"),
+        "switching": os.path.join(output_dir, f"mab_eval_switching_trajectory.{plot_format}"),
+        "qvalues": os.path.join(output_dir, f"mab_eval_qvalue_comparison.{plot_format}"),
     }
 
-    plot_multi_switching_trajectory(
+    show_exploration = _resolve_bool(cfg.get("plot_show_exploration"), default=True)
+    plot_summary_switching_trajectory(
         trajectory_data,
         comparison_paths["switching"],
+        bands=trajectory_bands,
+        explored_series=exploration_data,
         switch_point_bounds=dataset_bounds,
+        tick_fontsize=28,
+        show_exploration=show_exploration,
     )
     plot_multi_qvalue_vs_state(
         qvalue_data,
         comparison_paths["qvalues"],
         best_switch_points=best_sp_map,
+        show_titles=False,
+        show_legend=False,
+        tick_fontsize=28,
+        state_min=45,
+        state_max=72,
+        state_step=3,
+        x_tick_rotation=0,
     )
 
     metrics_payload = {

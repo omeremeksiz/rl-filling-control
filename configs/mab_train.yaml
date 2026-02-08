@@ -8,15 +8,15 @@ data:
   path: data/data.xlsx
 
 training:
-  episodes: 2000
+  episodes: 200
 
 hyperparameters:
   alpha: 0.4
   epsilon_start: 0.9
   epsilon_min: 0.1
   epsilon_decay: 0.995
-  underflow_penalty_constant: 0.0
-  overflow_penalty_constant: 0.0
+  underflow_penalty_constant: -1000.0
+  overflow_penalty_constant: -1000.0
   safe_min: 74
   safe_max: 76
   starting_switch_point: 45

@@ -1,13 +1,15 @@
-seed: 42
+seeds: [42, 43, 44]
 logging_level: INFO
 outputs_dir: outputs
+plot_format: png
+plot_show_exploration: true
 
 data:
   path: data/data.xlsx
 
 defaults:
   training:
-    episodes: 500
+    episodes: 200
   hyperparameters:
     alpha: 0.01
     epsilon_start: 0.5
@@ -21,14 +23,14 @@ defaults:
     exploration_step_weights: [5.0, 4.0, 3.0, 2.0, 1.0]
 
 experiments:
-  - name: zero_penalty
-    hyperparameters:
-      underflow_penalty_constant: 0.0
-      overflow_penalty_constant: 0.0
-  - name: low_penalty
-    hyperparameters:
-      underflow_penalty_constant: -90.0
-      overflow_penalty_constant: -90.0
+  # - name: zero_penalty
+  #   hyperparameters:
+  #     underflow_penalty_constant: 0.0
+  #     overflow_penalty_constant: 0.0
+  # - name: low_penalty
+  #   hyperparameters:
+  #     underflow_penalty_constant: -90.0
+  #     overflow_penalty_constant: -90.0
   - name: high_penalty
     hyperparameters:
       underflow_penalty_constant: -3000.0

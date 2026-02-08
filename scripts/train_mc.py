@@ -146,6 +146,7 @@ def main() -> None:
         final_weight = s.final_weight
         final_reward = calc_reward_mc(final_weight, safe_min, safe_max,
                                  overflow_penalty_constant, underflow_penalty_constant)
+        
         if trajectory:
             s_last, a_last, r_last = trajectory[-1]
             trajectory[-1] = (s_last, a_last, r_last + final_reward)

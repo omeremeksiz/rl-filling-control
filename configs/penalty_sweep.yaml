@@ -1,0 +1,23 @@
+outputs_dir: outputs
+plot_format: png
+seeds: [42, 43, 44]
+
+data:
+  mab_config: configs/mab_eval.yaml
+  mc_config: configs/mc_eval.yaml
+
+sweep:
+  target: both
+  schedule:
+    - start: 0
+      end: -1600
+      step: -25
+    # - start: -500
+    #   end: -1000
+    #   step: -25
+    # - start: -1000
+    #   end: -3000
+    #   step: -50
+
+plot:
+  x_tick_step: 0
