@@ -1,0 +1,17 @@
+outputs_dir: outputs
+plot_format: png
+plot_show_exploration: true
+
+plot:
+  episodes: 52
+  qvalue_episode: 52
+  compare_tick_fontsize: 32
+  qvalue_tick_fontsize: 28
+
+outputs:
+  mab_runs:
+    - path: outputs/20251021_151922_e334e7_mab_10000
+      label: MAB Test
+  mc_runs:
+    - path: outputs/20251230_094044_e55496_mc_katı_100
+      label: MC Test

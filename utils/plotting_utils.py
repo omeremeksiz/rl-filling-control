@@ -1112,8 +1112,9 @@ def plot_penalty_sweep_best_switch_points(
     ax.set_ylim(44, 76)
     ax.set_yticks(np.arange(44, 77, 4))
 
-    ax.set_xlabel("Penalty Constant", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Best Switching Point", fontsize=FONT_LABEL, fontweight="bold")
+    label_size = max(FONT_LABEL, 26)
+    ax.set_xlabel("Penalty Constant", fontsize=label_size, fontweight="bold")
+    ax.set_ylabel("Best Switching Point", fontsize=label_size, fontweight="bold")
     ax.tick_params(axis="both", labelsize=FONT_TICK, width=2, length=6)
     for tick in ax.get_yticklabels() + ax.get_xticklabels():
         tick.set_fontweight("bold")

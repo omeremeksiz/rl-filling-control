@@ -14,7 +14,7 @@ import yaml
 from utils.data_processing import DataProcessor
 from utils.plotting_utils import plot_penalty_sweep_best_switch_points
 
-from scripts import eval_mab, eval_mc
+from scripts import eval_mab_train as eval_mab, eval_mc_train as eval_mc
 
 CONFIG_PATH = os.path.join("configs", "penalty_sweep.yaml")
 

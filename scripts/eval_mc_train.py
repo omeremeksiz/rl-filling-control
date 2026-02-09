@@ -1,4 +1,4 @@
-# scripts/eval_mc.py
+# scripts/eval_mc_train.py
 from __future__ import annotations
 
 import copy

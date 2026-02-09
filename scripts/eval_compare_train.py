@@ -1,7 +1,8 @@
-# scripts/eval_compare.py
+# scripts/eval_compare_train.py
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from datetime import datetime
@@ -19,7 +20,7 @@ from utils.plotting_utils import (
     plot_summary_switching_trajectory,
 )
 
-from scripts import eval_mab, eval_mc
+from scripts import eval_mab_train as eval_mab, eval_mc_train as eval_mc
 import numpy as np
 
 
@@ -39,6 +40,18 @@ def _normalise_config_name(name: str, method_key: str) -> Tuple[str, str]:
     display = display or name.replace("_", " ").replace("-", " ")
     slug = _slugify(normalised) if normalised else _slugify(name)
     return slug, display or name
+
+
+def _infer_tick_step(values: Iterable[int], max_labels: int = 15) -> Optional[int]:
+    items = sorted({int(val) for val in values})
+    if not items:
+        return None
+    if len(items) <= max_labels:
+        return 1
+    span = items[-1] - items[0]
+    if span <= 0:
+        return 1
+    return max(1, int(math.ceil(span / max(1, max_labels - 1))))
 
 
 def _resolve_seed_list(value: Any, fallback: Iterable[int]) -> List[int]:
@@ -321,7 +334,7 @@ def main() -> None:
         switch_point_bounds=combined_bounds,
         show_legend=False,
         show_titles=False,
-        tick_fontsize=28,
+        tick_fontsize=32,
         show_exploration=show_exploration,
     )
     for idx, (display_name, summaries) in enumerate(mab_by_name.items(), start=1):
@@ -382,10 +395,21 @@ def main() -> None:
         individual_switching_paths[file_stub] = trajectory_path
 
         qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.{plot_format}")
+        mab_states = list(res.get("q_table", {}).keys())
+        mab_state_min = min(mab_states) if mab_states else None
+        mab_state_max = max(mab_states) if mab_states else None
+        mab_state_step = _infer_tick_step(mab_states)
         plot_multi_qvalue_vs_state(
             {label: res.get("q_table", {})},
             qvalues_path,
             best_switch_points={label: res.get("best_switch_point")},
+            show_titles=False,
+            show_legend=False,
+            tick_fontsize=28,
+            state_min=mab_state_min,
+            state_max=mab_state_max,
+            state_step=mab_state_step,
+            x_tick_rotation=0,
         )
         individual_qvalue_paths[file_stub] = qvalues_path
 
@@ -415,10 +439,23 @@ def main() -> None:
         individual_switching_paths[file_stub] = trajectory_path
 
         qvalues_path = os.path.join(qvalues_dir, f"{file_stub}.{plot_format}")
+        mc_weights = [state for (state, _) in res.get("q_table", {}).keys()]
+        mc_state_min = min(mc_weights) if mc_weights else None
+        mc_state_max = max(mc_weights) if mc_weights else None
+        mc_state_step = _infer_tick_step(mc_weights)
         plot_multi_qvalue_pair_tables(
             {label: res.get("q_table", {})},
             qvalues_path,
             best_switch_points={label: res.get("best_switch_point")},
+            show_titles=False,
+            show_legend=True,
+            tick_fontsize=28,
+            legend_fontsize=24,
+            x_tick_rotation=0,
+            force_last_xtick=False,
+            state_min=mc_state_min,
+            state_max=mc_state_max,
+            state_step=mc_state_step,
         )
         individual_qvalue_paths[file_stub] = qvalues_path
 

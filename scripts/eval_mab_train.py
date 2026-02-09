@@ -1,4 +1,4 @@
-# scripts/eval_mab.py
+# scripts/eval_mab_train.py
 from __future__ import annotations
 
 import copy
