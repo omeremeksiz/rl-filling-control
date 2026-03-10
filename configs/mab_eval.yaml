@@ -23,14 +23,14 @@ defaults:
     exploration_step_weights: [5.0, 4.0, 3.0, 2.0, 1.0]
 
 experiments:
-  # - name: zero_penalty
-  #   hyperparameters:
-  #     underflow_penalty_constant: 0.0
-  #     overflow_penalty_constant: 0.0
-  # - name: low_penalty
-  #   hyperparameters:
-  #     underflow_penalty_constant: -90.0
-  #     overflow_penalty_constant: -90.0
+  - name: zero_penalty
+    hyperparameters:
+      underflow_penalty_constant: 0.0
+      overflow_penalty_constant: 0.0
+  - name: low_penalty
+    hyperparameters:
+      underflow_penalty_constant: -90.0
+      overflow_penalty_constant: -90.0
   - name: high_penalty
     hyperparameters:
       underflow_penalty_constant: -3000.0

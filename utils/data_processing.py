@@ -179,9 +179,10 @@ class DataProcessor:
 
     def _parse_weight_sequence(self, data_pairs: List[str]) -> Optional[List[int]]:
         try:
-            self._rearrange_pairs(data_pairs)
+            pairs = list(data_pairs)
+            self._rearrange_pairs(pairs)
             weights = []
-            for pair in data_pairs:
+            for pair in pairs:
                 w = self._extract_weight_from_pair(pair)
                 if w is not None:
                     weights.append(w)
@@ -238,5 +239,4 @@ class DataProcessor:
         overflow = max(0, final_weight - hi)
         underflow = max(0, lo - final_weight)
         return overflow, underflow
-
 

@@ -11,7 +11,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 import numpy as np
 import openpyxl
 import yaml
-import math
 
 from utils.plotting_utils import (
     plot_summary_switching_trajectory,
@@ -189,24 +188,13 @@ def _load_mc_q_table(excel_path: str, episode_num: int) -> Dict[Tuple[int, int],
         action = ws.cell(row=row, column=start_col + 1).value
         q_val = ws.cell(row=row, column=start_col + 3).value
         try:
-            q_table[(int(weight), int(action))] = float(q_val)
+            weight_num = float(weight)
+            q_table[(int(weight_num), int(action))] = float(q_val)
         except (TypeError, ValueError):
             pass
         row += 1
     wb.close()
     return q_table
-
-
-def _infer_tick_step(states: Iterable[int], max_labels: int = 15) -> Optional[int]:
-    state_list = sorted({int(val) for val in states})
-    if not state_list:
-        return None
-    if len(state_list) <= max_labels:
-        return 1
-    span = state_list[-1] - state_list[0]
-    if span <= 0:
-        return 1
-    return max(1, int(math.ceil(span / max(1, max_labels - 1))))
 
 
 def main() -> None:
@@ -222,8 +210,6 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join(outputs_dir, f"eval_compare_test_{timestamp}")
     os.makedirs(output_dir, exist_ok=True)
-    qvalues_dir = os.path.join(output_dir, "qvalues")
-    os.makedirs(qvalues_dir, exist_ok=True)
 
     log_path = os.path.join(output_dir, "eval_compare_test.log")
     logger = logging.getLogger(f"eval_compare_test_{timestamp}")
@@ -330,57 +316,70 @@ def main() -> None:
         show_titles=False,
         tick_fontsize=compare_tick_fontsize,
         show_exploration=show_exploration,
+        x_tick_step=10,
+        x_tick_start=10,
+        force_last_xtick=True,
     )
 
-    for label, table in qvalue_tables_mab.items():
-        q_path = os.path.join(qvalues_dir, f"{label.replace(' ', '_').lower()}_qvalues.{plot_format}")
-        states = list(table.keys())
-        state_min = min(states) if states else None
-        state_max = max(states) if states else None
-        state_step = _infer_tick_step(states)
-        plot_multi_qvalue_vs_state(
-            {label: table},
-            q_path,
-            best_switch_points={label: best_sp_mab.get(label)},
-            show_titles=False,
-            show_legend=False,
-            tick_fontsize=qvalue_tick_fontsize,
-            state_min=state_min,
-            state_max=state_max,
-            state_step=state_step,
-            x_tick_rotation=0,
-        )
+    def _slugify(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
 
-    for label, table in qvalue_tables_mc.items():
-        q_path = os.path.join(qvalues_dir, f"{label.replace(' ', '_').lower()}_qvalues.{plot_format}")
-        weights = [state for (state, _) in table.keys()]
-        state_min = min(weights) if weights else None
-        state_max = max(weights) if weights else None
-        state_step = _infer_tick_step(weights)
-        plot_multi_qvalue_pair_tables(
-            {label: table},
-            q_path,
-            best_switch_points={label: best_sp_mc.get(label)},
-            show_titles=False,
-            show_legend=True,
-            tick_fontsize=qvalue_tick_fontsize,
-            legend_fontsize=max(24, qvalue_tick_fontsize),
-            x_tick_rotation=0,
-            force_last_xtick=False,
-            state_min=state_min,
-            state_max=state_max,
-            state_step=state_step,
-        )
+    mab_qvalue_paths: Dict[str, str] = {}
+    if qvalue_tables_mab:
+        single = len(qvalue_tables_mab) == 1
+        for label, table in qvalue_tables_mab.items():
+            if single:
+                mab_q_path = os.path.join(output_dir, f"mab_eval_qvalue_comparison.{plot_format}")
+            else:
+                mab_q_path = os.path.join(output_dir, f"{_slugify(label)}_qvalues.{plot_format}")
+            plot_multi_qvalue_vs_state(
+                {label: table},
+                mab_q_path,
+                best_switch_points={label: best_sp_mab.get(label)},
+                show_titles=False,
+                show_legend=False,
+                tick_fontsize=qvalue_tick_fontsize,
+                state_min=45,
+                state_max=72,
+                state_step=3,
+                x_tick_rotation=0,
+            )
+            mab_qvalue_paths[label] = mab_q_path
 
+    mc_qvalue_paths: Dict[str, str] = {}
+    if qvalue_tables_mc:
+        single = len(qvalue_tables_mc) == 1
+        for label, table in qvalue_tables_mc.items():
+            if single:
+                mc_q_path = os.path.join(output_dir, f"mc_eval_qvalue_comparison.{plot_format}")
+            else:
+                mc_q_path = os.path.join(output_dir, f"{_slugify(label)}_qvalues.{plot_format}")
+            plot_multi_qvalue_pair_tables(
+                {label: table},
+                mc_q_path,
+                best_switch_points={label: best_sp_mc.get(label)},
+                show_titles=False,
+                show_legend=True,
+                tick_fontsize=qvalue_tick_fontsize,
+                legend_fontsize=max(24, qvalue_tick_fontsize),
+                x_tick_rotation=0,
+                force_last_xtick=False,
+            )
+            mc_qvalue_paths[label] = mc_q_path
+
+    artifacts: Dict[str, Any] = {
+        "compare_switching": compare_path,
+        "mab_qvalues": next(iter(mab_qvalue_paths.values()), None),
+        "mc_qvalues": next(iter(mc_qvalue_paths.values()), None),
+        "mab_qvalues_by_label": mab_qvalue_paths,
+        "mc_qvalues_by_label": mc_qvalue_paths,
+    }
     metrics_path = os.path.join(output_dir, "eval_compare_test_metrics.json")
     with open(metrics_path, "w", encoding="utf-8") as handle:
         json.dump(
             {
                 "timestamp": timestamp,
-                "artifacts": {
-                    "compare_switching": compare_path,
-                    "qvalues_dir": qvalues_dir,
-                },
+                "artifacts": artifacts,
                 "runs": {
                     "mab": mab_runs,
                     "mc": mc_runs,

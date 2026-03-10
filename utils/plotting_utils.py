@@ -691,6 +691,9 @@ def plot_summary_switching_trajectory(
     tick_fontsize: Optional[int] = None,
     show_exploration: bool = True,
     exploration_color: str = "#39FF14",
+    x_tick_step: Optional[int] = None,
+    x_tick_start: Optional[int] = None,
+    force_last_xtick: bool = True,
 ) -> None:
     fig, ax = plt.subplots(figsize=FIG_SIZE_STANDARD, dpi=DPI_EXPORT)
     ax.set_facecolor("white")
@@ -777,7 +780,25 @@ def plot_summary_switching_trajectory(
     ax.set_xlim(x_min, x_max)
     ax.margins(x=0)
 
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=15))
+    if x_tick_step is not None and int(x_tick_step) > 0:
+        step = int(x_tick_step)
+        start_tick = int(x_tick_start) if x_tick_start is not None else int(x_min)
+        end_tick = int(x_max)
+        if start_tick > end_tick:
+            ticks = []
+        else:
+            ticks = list(range(start_tick, end_tick + 1, step))
+        if not ticks:
+            ticks = [start_tick]
+        if force_last_xtick and ticks[-1] != end_tick:
+            ticks.append(end_tick)
+        ticks = sorted(set(ticks))
+        ticks = [tick for tick in ticks if x_min <= tick <= x_max]
+        if not ticks:
+            ticks = [end_tick]
+        ax.set_xticks(ticks)
+    else:
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=15))
     ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True, prune="both", nbins=20))
 
     ax.set_ylim(44, 76)

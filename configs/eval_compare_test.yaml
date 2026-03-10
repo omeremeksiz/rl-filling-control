@@ -3,15 +3,15 @@ plot_format: png
 plot_show_exploration: true
 
 plot:
-  episodes: 52
-  qvalue_episode: 52
+  episodes: 100
+  qvalue_episode: 100
   compare_tick_fontsize: 32
   qvalue_tick_fontsize: 28
 
 outputs:
   mab_runs:
-    - path: outputs/20251021_151922_e334e7_mab_10000
+    - path: outputs/20260217_153150_938365_mab_-10000
       label: MAB Test
   mc_runs:
-    - path: outputs/20251230_094044_e55496_mc_katı_100
+    - path: outputs/20260210_141923_addcb3_mc_katı_50
       label: MC Test
