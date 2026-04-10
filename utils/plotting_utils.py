@@ -1161,3 +1161,192 @@ def plot_penalty_sweep_best_switch_points(
     fig.tight_layout()
     _save_figure(fig, out_path)
     plt.close(fig)
+
+
+def _deduplicate_close_points(
+    xs: List[float],
+    ys: List[float],
+    min_dist_frac: float = 0.025,
+) -> List[int]:
+    """Greedy deduplication in normalised (x, y) space.
+
+    Returns indices of points to keep as markers.  A point is dropped when it
+    falls within min_dist_frac of the data range from any already-kept point.
+    """
+    if not xs:
+        return []
+    x_range = (max(xs) - min(xs)) or 1.0
+    y_range = (max(ys) - min(ys)) or 1.0
+    kept: List[int] = []
+    for i in range(len(xs)):
+        too_close = any(
+            ((xs[i] - xs[j]) / x_range) ** 2 + ((ys[i] - ys[j]) / y_range) ** 2
+            < min_dist_frac ** 2
+            for j in kept
+        )
+        if not too_close:
+            kept.append(i)
+    return kept
+
+
+def plot_time_accuracy_tradeoff(
+    method_tradeoffs: Mapping[str, Mapping[int, Sequence[Tuple[float, float]]]],
+    out_path: str,
+    *,
+    method_sp_results: Optional[Mapping[str, Mapping[int, Sequence[float]]]] = None,
+    penalty_order: Optional[Sequence[int]] = None,
+    show_legend: bool = True,
+) -> None:
+    """Tradeoff plot: avg_episode_length (x) vs safe_rate (y).
+
+    method_tradeoffs[method][penalty] is a list of (avg_time, safe_rate) per seed.
+    method_sp_results[method][penalty] is a list of converged SP per seed.
+    When method_sp_results is provided, only penalties where the median converged
+    SP changes are shown as markers.  The connecting line passes through all mean
+    points.  Marker size encodes abs(penalty).  First and last plotted points are
+    annotated with their penalty value.
+    """
+    if not method_tradeoffs:
+        return
+
+    if penalty_order is None:
+        penalty_order = sorted(
+            {p for pts in method_tradeoffs.values() for p in pts.keys()}
+        )
+    if not penalty_order:
+        return
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE_STANDARD, dpi=DPI_EXPORT)
+    ax.set_facecolor("white")
+
+    colors: Dict[str, str] = {"MAB": "tab:orange", "MC": "tab:blue"}
+    prop_cycle = plt.rcParams.get("axes.prop_cycle")
+    if prop_cycle is not None:
+        default_colors: Sequence[str] = prop_cycle.by_key().get("color", ["tab:blue", "tab:orange"])
+    else:
+        default_colors = ["tab:blue", "tab:orange"]
+    color_iter = iter(default_colors)
+
+    for method, points in method_tradeoffs.items():
+        color = colors.get(method)
+        if color is None:
+            try:
+                color = next(color_iter)
+            except StopIteration:
+                color_iter = iter(default_colors)
+                color = next(color_iter)
+
+        xs: List[float] = []
+        ys: List[float] = []
+        valid_penalties: List[int] = []
+        median_sps: List[Optional[float]] = []
+
+        sp_data = (method_sp_results or {}).get(method, {})
+
+        for penalty in penalty_order:
+            seed_vals = list(points.get(penalty, []))
+            finite_vals = [(t, s) for (t, s) in seed_vals if np.isfinite(t) and np.isfinite(s)]
+            if not finite_vals:
+                continue
+            xs.append(float(np.mean([t for t, s in finite_vals])))
+            ys.append(float(np.mean([s for t, s in finite_vals])))
+            valid_penalties.append(int(penalty))
+            sp_vals = [float(v) for v in sp_data.get(penalty, []) if v is not None and np.isfinite(float(v))]
+            median_sps.append(float(np.median(sp_vals)) if sp_vals else None)
+
+        if not xs:
+            continue
+
+        # Determine which indices to show as markers (SP-change filter)
+        if method_sp_results is not None:
+            marker_indices = []
+            prev_sp = None
+            for i, msp in enumerate(median_sps):
+                if msp is None:
+                    continue
+                if prev_sp is None or msp != prev_sp:
+                    marker_indices.append(i)
+                    prev_sp = msp
+            # Always include first and last valid index
+            first_valid = next((i for i, msp in enumerate(median_sps) if msp is not None), None)
+            last_valid = next((i for i, msp in reversed(list(enumerate(median_sps))) if msp is not None), None)
+            for forced in (first_valid, last_valid):
+                if forced is not None and forced not in marker_indices:
+                    marker_indices.append(forced)
+            marker_indices = sorted(set(marker_indices))
+        else:
+            marker_indices = list(range(len(xs)))
+
+        max_abs_pen = max(abs(p) for p in valid_penalties) or 1
+
+        # Connecting line through all mean points
+        ax.plot(
+            xs,
+            ys,
+            linewidth=TRAJECTORY_LINEWIDTH,
+            color=color,
+            alpha=0.7,
+            zorder=2,
+            label=method,
+        )
+
+        # Hollow circle markers at SP-change points, size by abs(penalty)
+        for rank, i in enumerate(marker_indices):
+            x, y = xs[i], ys[i]
+            pen = valid_penalties[i]
+            size = 40 + (abs(pen) / max_abs_pen) * 180
+            is_endpoint = rank == 0 or rank == len(marker_indices) - 1
+
+            ax.scatter(
+                x, y,
+                s=size,
+                color="white",
+                edgecolors=color,
+                linewidths=2.6,
+                zorder=4,
+            )
+            if is_endpoint:
+                is_max_abs = abs(pen) == max_abs_pen
+                ax.annotate(
+                    str(pen),
+                    xy=(x, y),
+                    xytext=(0, -24) if is_max_abs else (5, 5),
+                    textcoords="offset points",
+                    fontsize=16,
+                    fontweight="bold",
+                    color=color,
+                    ha="center" if is_max_abs else "left",
+                )
+
+    ax.set_xlim(200, 450)
+    ax.set_xticks(range(200, 451, 25))
+    ax.set_ylim(0, 1.05)
+
+    label_size = max(FONT_LABEL, 26)
+    ax.set_xlabel("Average Episode Length", fontsize=label_size, fontweight="bold")
+    ax.set_ylabel("Safe Rate", fontsize=label_size, fontweight="bold")
+    ax.tick_params(axis="both", labelsize=FONT_TICK, width=2, length=6)
+    for tick in ax.get_yticklabels() + ax.get_xticklabels():
+        tick.set_fontweight("bold")
+    ax.grid(True, linestyle="--", linewidth=0.7, alpha=0.6)
+    ax.set_axisbelow(True)
+
+    if show_legend:
+        legend = ax.legend(
+            fontsize=max(FONT_LEGEND, 24),
+            loc="upper left",
+            frameon=True,
+            handlelength=1.4,
+            handletextpad=0.5,
+            borderpad=0.3,
+            borderaxespad=0.3,
+        )
+        legend.get_frame().set_alpha(0.3)
+        legend.get_frame().set_edgecolor("black")
+        legend.get_frame().set_linewidth(0.8)
+        for text in legend.get_texts():
+            text.set_fontweight("bold")
+
+    fig.tight_layout()
+    _save_figure(fig, out_path)
+    plt.close(fig)

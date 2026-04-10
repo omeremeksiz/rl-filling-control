@@ -6,13 +6,13 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import yaml
 
 from utils.data_processing import DataProcessor
-from utils.plotting_utils import plot_penalty_sweep_best_switch_points
+from utils.plotting_utils import plot_penalty_sweep_best_switch_points, plot_time_accuracy_tradeoff
 
 from scripts import eval_mab_train as eval_mab, eval_mc_train as eval_mc
 
@@ -62,6 +62,51 @@ def _build_penalty_values(start: int, end: int, step: int) -> List[int]:
     return values
 
 
+def _find_convergence_episode(model_selected: List[int], tolerance: int = 2) -> int:
+    """Return the earliest index t such that all model_selected[t:] are within
+    ±tolerance of mean(model_selected[t:]).  Returns len(model_selected) if the
+    sequence never converges (caller should treat post-convergence window as empty).
+    """
+    n = len(model_selected)
+    for t in range(n):
+        suffix = model_selected[t:]
+        mean_val = float(np.mean(suffix))
+        if all(abs(sp - mean_val) <= tolerance for sp in suffix):
+            return t
+    return n
+
+
+def _compute_post_convergence_metrics(
+    summary: Mapping[str, Any],
+    tolerance: int = 2,
+) -> Optional[Tuple[float, float]]:
+    """Return (avg_episode_length, safe_rate) for episodes after convergence.
+
+    Returns None if convergence is never reached or the post-convergence window
+    is empty.
+    """
+    model_selected: List[int] = summary.get("model_selected", [])
+    episode_lengths: List[int] = summary.get("episode_lengths", [])
+    is_safe: List[bool] = summary.get("is_safe", [])
+
+    if not model_selected or not episode_lengths or not is_safe:
+        return None
+
+    t = _find_convergence_episode(model_selected, tolerance)
+    if t >= len(model_selected):
+        return None
+
+    post_lengths = episode_lengths[t:]
+    post_safe = is_safe[t:]
+
+    if not post_lengths:
+        return None
+
+    avg_time = float(np.mean(post_lengths))
+    safe_rate = float(np.mean([float(s) for s in post_safe]))
+    return avg_time, safe_rate
+
+
 def _select_experiment(experiments: Sequence[Mapping[str, Any]], name: Optional[str]) -> Mapping[str, Any]:
     if not experiments:
         raise RuntimeError("No experiments available to run.")
@@ -82,7 +127,7 @@ def _run_method_sweep(
     experiment_name: Optional[str],
     episodes_override: Optional[int],
     logger: logging.Logger,
-) -> Dict[int, List[float]]:
+) -> Tuple[Dict[int, List[float]], Dict[int, List[Tuple[float, float]]]]:
     data_cfg = cfg.get("data", {})
     data_path = data_cfg.get("path", "")
     if not data_path:
@@ -104,6 +149,7 @@ def _run_method_sweep(
         raise RuntimeError(f"{method} experiment must specify training.episodes > 0")
 
     results: Dict[int, List[float]] = {}
+    tradeoff_results: Dict[int, List[Tuple[float, float]]] = {}
     for penalty in penalties:
         penalty_value = float(penalty)
         for seed in seeds:
@@ -142,7 +188,12 @@ def _run_method_sweep(
             if best_sp is None:
                 continue
             results.setdefault(penalty, []).append(float(best_sp))
-    return results
+
+            metrics = _compute_post_convergence_metrics(summary)
+            if metrics is not None:
+                tradeoff_results.setdefault(penalty, []).append(metrics)
+
+    return results, tradeoff_results
 
 
 def main() -> None:
@@ -197,7 +248,7 @@ def main() -> None:
     mab_seeds = _resolve_seed_list(sweep_seeds, _resolve_seed_list(mab_cfg.get("seeds"), [int(mab_cfg.get("seed", 42))]))
     mc_seeds = _resolve_seed_list(sweep_seeds, _resolve_seed_list(mc_cfg.get("seeds"), [int(mc_cfg.get("seed", 42))]))
 
-    mab_results = _run_method_sweep(
+    mab_results, mab_tradeoffs = _run_method_sweep(
         method="MAB",
         cfg=mab_cfg,
         seeds=mab_seeds,
@@ -207,7 +258,7 @@ def main() -> None:
         episodes_override=episodes_override,
         logger=logger,
     )
-    mc_results = _run_method_sweep(
+    mc_results, mc_tradeoffs = _run_method_sweep(
         method="MC",
         cfg=mc_cfg,
         seeds=mc_seeds,
@@ -223,6 +274,7 @@ def main() -> None:
     x_tick_step = int(plot_cfg.get("x_tick_step", 0))
     x_tick_schedule = plot_cfg.get("x_tick_schedule")
     plot_path = os.path.join(output_dir, f"penalty_sweep_best_switch_points.{plot_format}")
+    tradeoff_plot_path = os.path.join(output_dir, f"penalty_sweep_time_accuracy_tradeoff.{plot_format}")
 
     plot_penalty_sweep_best_switch_points(
         {
@@ -236,6 +288,20 @@ def main() -> None:
         show_legend=True,
     )
 
+    plot_time_accuracy_tradeoff(
+        {
+            "MAB": mab_tradeoffs,
+            "MC": mc_tradeoffs,
+        },
+        tradeoff_plot_path,
+        method_sp_results={
+            "MAB": mab_results,
+            "MC": mc_results,
+        },
+        penalty_order=penalties,
+        show_legend=True,
+    )
+
     metrics = {
         "timestamp": timestamp,
         "penalties": penalties,
@@ -246,8 +312,17 @@ def main() -> None:
         "target": penalty_target,
         "mab_results": mab_results,
         "mc_results": mc_results,
+        "mab_tradeoffs": {
+            str(pen): [list(t) for t in vals]
+            for pen, vals in mab_tradeoffs.items()
+        },
+        "mc_tradeoffs": {
+            str(pen): [list(t) for t in vals]
+            for pen, vals in mc_tradeoffs.items()
+        },
         "artifacts": {
             "plot": plot_path,
+            "time_accuracy_tradeoff": tradeoff_plot_path,
         },
     }
     metrics_path = os.path.join(output_dir, "penalty_sweep_metrics.json")

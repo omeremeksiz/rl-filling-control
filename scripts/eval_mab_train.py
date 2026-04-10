@@ -178,6 +178,8 @@ def run_experiment(
     update_counts = defaultdict(int)
     q_history: List[Dict[int, float]] = []
     explored_choices: List[Optional[int]] = []
+    episode_lengths_list: List[int] = []
+    is_safe_list: List[bool] = []
 
     for ep in range(episodes):
         experienced_sp = current_sp
@@ -187,6 +189,9 @@ def run_experiment(
 
         episode_length = selected_session.episode_length
         final_weight = selected_session.final_weight
+        episode_lengths_list.append(episode_length)
+        is_safe_list.append(safe_min <= final_weight <= safe_max)
+
         reward = calc_reward_mab(
             episode_length,
             final_weight,
@@ -233,6 +238,8 @@ def run_experiment(
         "best_switch_point": max(q_table, key=q_table.get) if q_table else None,
         "q_history": q_history,
         "seed": seed,
+        "episode_lengths": episode_lengths_list,
+        "is_safe": is_safe_list,
     }
     return summary
 

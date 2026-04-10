@@ -240,6 +240,8 @@ def run_experiment(
     model_selected_list: List[int] = []
     explored_list: List[Optional[int]] = []
     q_history: List[Dict[Tuple[int, int], float]] = []
+    episode_lengths_list: List[int] = []
+    is_safe_list: List[bool] = []
 
     for episode in range(episodes):
         experienced_sp = current_sp
@@ -248,6 +250,8 @@ def run_experiment(
             raise RuntimeError(f"No sessions available for switch point {experienced_sp}.")
         session = random.choice(unused_sessions)
         dp.mark_session_as_used(experienced_sp, session)
+        episode_lengths_list.append(session.episode_length)
+        is_safe_list.append(safe_min <= (session.final_weight or 0) <= safe_max)
 
         trajectory = build_trajectory(
             session.weight_sequence,
@@ -322,6 +326,8 @@ def run_experiment(
         "q_history": q_history,
         "seed": seed,
         "update_counts": dict(update_counts),
+        "episode_lengths": episode_lengths_list,
+        "is_safe": is_safe_list,
     }
     return summary
 
