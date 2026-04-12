@@ -1285,7 +1285,6 @@ def plot_time_accuracy_tradeoff(
             ys,
             linewidth=TRAJECTORY_LINEWIDTH,
             color=color,
-            alpha=0.7,
             zorder=2,
             label=method,
         )
@@ -1320,7 +1319,8 @@ def plot_time_accuracy_tradeoff(
 
     ax.set_xlim(200, 450)
     ax.set_xticks(range(200, 451, 25))
-    ax.set_ylim(0, 1.05)
+    ax.set_ylim(0, 1.0)
+    ax.set_yticks(np.arange(0, 1.01, 0.2))
 
     label_size = max(FONT_LABEL, 26)
     ax.set_xlabel("Average Episode Length", fontsize=label_size, fontweight="bold")
